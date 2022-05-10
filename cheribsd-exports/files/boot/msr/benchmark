@@ -1,0 +1,5 @@
+config = require"config"
+config.reload("/boot/msr/_common.conf")
+config.parse("kernel=\"kernel.GENERIC-MORELLO-NODEBUG\"")
+config.loadelf()
+cli_execute("boot")

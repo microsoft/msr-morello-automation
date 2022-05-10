@@ -1,0 +1,63 @@
+#!/bin/sh
+# Combine several stages of the automation to boot the board and make it
+# ready for SSH (see run.ssh).
+
+set -e -u
+
+# Hunt for ourselves
+SELFDIR=$(dirname "$(readlink -f -- "$0")")
+
+# Accept command line options; the target variables are not overridden and so
+# can also come from the environment if that's convenient.
+while getopts 'd:l:n:p:s:' o; do
+  case "$o" in
+    d) MORELLO_HOSTNAME="${OPTARG}";;
+    l) LOADER_URL="${OPTARG}";;
+    n) NFS_ROOT="${OPTARG}";;
+    p) ON_PANIC_KILL_PID="${OPTARG}";;
+    s) LOADER_SCRIPT="${OPTARG}";;
+    ?) echo >&2 "Bad options"
+       exit 1;;
+  esac
+done
+
+# While cheribsd-mfs.expect can work without scripts, our loader.conf.local
+# does not fully specify the world we need to bring up, so always use an
+# `include`-ed script even if one wasn't set above.
+: "${LOADER_SCRIPT:=/boot/msr/default}"
+
+# Ensure runtime directory exists
+[ -d "${RUNTIME_DIRECTORY}" ] || {
+  echo >&2 "Missing ${RUNTIME_DIRECTORY}"
+  exit 1
+}
+
+echo "Bringing up ${MORELLO_HOSTNAME}":
+echo " Booting ${LOADER_URL}, script ${LOADER_SCRIPT}"
+echo " Mounting ${NFS_ROOT}"
+
+"${SELFDIR}"/mcc-efi.expect \
+  -board "${MORELLO_HOSTNAME}" -boot-url "${LOADER_URL}"
+
+# Create the host ssh key using ECDSA and NIST P-384
+rm -f "${RUNTIME_DIRECTORY}"/ssh_host_ecdsa_key
+ssh-keygen -q -N "" -t ecdsa -b 384 -f "${RUNTIME_DIRECTORY}"/ssh_host_ecdsa_key
+
+"${SELFDIR}"/cheribsd-mfs.expect \
+  -board "${MORELLO_HOSTNAME}" \
+  -loader-script "${LOADER_SCRIPT}" \
+  -nfs-root "${NFS_ROOT}" \
+  -ssh-ecdsa "${RUNTIME_DIRECTORY}"/ssh_host_ecdsa_key \
+  -dhcp-out "${RUNTIME_DIRECTORY}"/ipaddr \
+  -lurk ${ON_PANIC_KILL_PID+-panic-kill ${ON_PANIC_KILL_PID}}
+
+# Create the SSH "known hosts" file
+{
+ printf "%s " "$(cat "${RUNTIME_DIRECTORY}"/ipaddr)"
+ cat "${RUNTIME_DIRECTORY}"/ssh_host_ecdsa_key.pub
+} >"${RUNTIME_DIRECTORY}"/ssh_known_hosts
+
+# Run other on-board initialization commands
+# This also serves to test that we're alive and responding to SSH
+export MORELLO_HOSTNAME
+exec "${SELFDIR}"/run.ssh /opt/bin/msr-morello-init

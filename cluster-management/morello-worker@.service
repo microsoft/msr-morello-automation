@@ -1,0 +1,22 @@
+[Unit]
+Description=Morello work-queue and board-runner
+After=dev-morello-%i-tty\x2dmcc.device
+After=dev-morello-%i-tty\x2dap0.device
+Requires=dev-morello-%i-tty\x2dmcc.device
+Requires=dev-morello-%i-tty\x2dap0.device
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=exec
+Restart=always
+RestartPreventExitStatus=42
+User=morello-auto
+Group=morello-auto
+
+RuntimeDirectory=morello/%I
+Environment=MORELLO_HOSTNAME=%I
+
+# Set $MORELLO_SCRIPTS with a drop-in [Service] Environment=
+ExecStart=/bin/sh ${MORELLO_SCRIPTS}/work-bus/executor/wrapper.sh

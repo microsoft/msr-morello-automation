@@ -1,0 +1,6 @@
+#!/bin/sh
+set -u
+exec ssh -o BatchMode=yes \
+  -o UserKnownHostsFile="${RUNTIME_DIRECTORY}"/ssh_known_hosts \
+  -i ${MORELLO_SSH_USER_KEY-~morello-auto/.ssh/id_ecdsa} \
+  root@"$(cat "${RUNTIME_DIRECTORY}"/ipaddr)" "$@"

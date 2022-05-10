@@ -1,0 +1,38 @@
+#!/usr/bin/expect
+
+package require cmdline
+set cmd_params {
+  { board.arg "" "Set the board directory, DIR, in /dev/morello/\$DIR/tty-*" }
+}
+if {[catch {array set cmdopts [cmdline::getoptions ::argv $cmd_params]}]} {
+  send_user [cmdline::usage $cmd_params]
+  exit 1
+}
+if {0 == [string length "${cmdopts(board)}" ]} {
+  send_user "Must specify --board\n"
+  exit 1
+}
+
+# Speak without cooked TTYs to the board's UART
+set stty_init "raw -echo"
+set board_dir "/dev/morello/${cmdopts(board)}"
+set socat_common "b115200,sane,cfmakeraw,clocal,echo=0"
+
+spawn "socat" "STDIO" "${board_dir}/tty-mcc,${socat_common},crtscts=1"
+set smc ${spawn_id}
+
+send_user "===> MCC to prompt\n"
+set timeout 120
+send -i ${smc} "\r"
+expect {
+  -i ${smc} "Cmd>" { }
+  timeout { return -code error "MCC not at prompt" }
+}
+
+send_user "===> MCC to shutdown\n"
+send -i ${smc} "shutdown\r"
+set timeout 30
+expect {
+  -i ${smc} -re "Board powered down.*\r\n" { }
+  timeout { return -code error "Timed out after shutdown command" }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "msr-morello-work-bus-client",
+  "version": "0.0.0",
+  "description": "Miscellaneous client utilities",
+  "bin": {
+    "msr-morello-wbclient": "./dist/index.js"
+  },
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^17.0.10",
+    "@types/uuid": "^8.3.4",
+    "@types/yargs": "^17.0.8"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^3.15.0",
+    "@azure/service-bus": "^7.4.0",
+    "octokit": "^1.7.1",
+    "uuid": "^8.3.2",
+    "yargs": "^17.3.1"
+  }
+}

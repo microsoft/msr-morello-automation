@@ -1,0 +1,8 @@
+# Make it easier for expect to synchronize with us
+beastie_disable="YES"
+prompt="CheriBSD>"
+
+# Do not load a kernel by default; the expect scripts will drive
+verbose_loading="YES"
+autoboot_delay="NO"
+kernel=""

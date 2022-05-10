@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# BEFORE: NETWORKING
+# REQUIRE: FILESYSTEMS
+# PROVIDE: msr-morello-pre-net
+
+# At this point, after FILESYSTEMS, diskless(8) will have brought up enough of
+# the world that we should have real storage mounted on /mnt
+
+# If provided by our boot scripts, install the ssh key
+SSH_KEY=ssh_host_ecdsa_key
+[ -f /mnt/etc/${SSH_KEY} ] && {
+  echo "msr-morello: install ssh key"
+  install -m 400 /mnt/etc/${SSH_KEY} /etc/ssh
+}
+
+echo "msr-morello: remove /dev/md0"
+mdconfig -d -u 0
+
+echo "msr-morello: ada0 nullfs mounts..."
+mkdir /mnt/nullfs-usr-local
+mount_nullfs /mnt/nullfs-usr-local /usr/local
+mkdir /mnt/nullfs-usr-local64
+mount_nullfs /mnt/nullfs-usr-local64 /usr/local64

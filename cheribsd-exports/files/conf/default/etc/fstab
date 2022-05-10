@@ -1,0 +1,5 @@
+tmpfs /tmp tmpfs rw 0 0
+tmpfs /var tmpfs rw 0 0
+proc /proc procfs rw 0 0
+/dev/gpt/eliswap none swap sw 0 0
+/dev/gpt/elimnt /mnt ufs rw 0 0

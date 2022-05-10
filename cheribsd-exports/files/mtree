@@ -1,0 +1,25 @@
+#mtree
+# /boot already exists in the image
+boot/loader.conf.local contents=boot/loader.conf.local uid=0 gid=0 mode=644 type=file
+boot/msr uid=0 gid=0 mode=755 type=dir
+boot/msr/_common.conf contents=boot/msr/_common.conf uid=0 gid=0 mode=644 type=file
+boot/msr/benchmark contents=boot/msr/benchmark uid=0 gid=0 mode=644 type=file
+boot/msr/default contents=boot/msr/default uid=0 gid=0 mode=644 type=file
+boot/msr/purecap contents=boot/msr/purecap uid=0 gid=0 mode=644 type=file
+conf uid=0 gid=0 mode=755 type=dir
+conf/base uid=0 gid=0 mode=755 type=dir
+conf/base/etc uid=0 gid=0 mode=755 type=dir
+conf/base/etc/diskless_remount contents=conf/base/etc/diskless_remount uid=0 gid=0 mode=444 type=file
+conf/base/etc/md_size contents=conf/base/etc/md_size uid=0 gid=0 mode=444 type=file
+conf/default uid=0 gid=0 mode=755 type=dir
+conf/default/etc uid=0 gid=0 mode=755 type=dir
+conf/default/etc/fstab contents=conf/default/etc/fstab uid=0 gid=0 mode=444 type=file
+# /etc already exists
+etc/rc.conf contents=etc/rc.conf uid=0 gid=0 mode=444 type=file
+# /etc/rc.d already exists
+etc/rc.d/msr-morello-pre-net contents=etc/rc.d/msr-morello-pre-net uid=0 gid=0 mode=755 type=file
+etc/diskless contents=etc/diskless uid=0 gid=0 mode=444 type=file
+opt uid=0 gid=0 mode=755 type=dir
+opt/bin uid=0 gid=0 mode=755 type=dir
+opt/bin/msr-morello-init contents=opt/bin/msr-morello-init uid=0 gid=0 mode=755 type=file
+opt/bin/msr-github-act-runner.sh contents=opt/bin/msr-github-act-runner.sh uid=0 gid=0 mode=755 type=file

@@ -1,0 +1,280 @@
+#!/usr/bin/expect
+
+package require textutil::split
+package require uuid
+package require md5
+
+proc typeslow { sid string } {
+  set timeout 5
+  foreach chars [::textutil::split::splitn ${string} 10] {
+    send -i ${sid} -- "${chars}"
+    foreach char [split "${chars}" ""] {
+      expect {
+        -i ${sid} -ex ${char} {}
+        timeout { return -code error "Timeout waiting for typeslow echo" }
+      }
+    }
+  }
+}
+
+proc wait_for_line_ex { sid str why } {
+  expect {
+    -i ${sid}
+    -ex ${str} {}
+    -re ".*\[\r\n\]" { exp_continue -continue_timer }
+    timeout { return -code error "Timeout: ${why}" }
+  }
+}
+
+proc sync_with_echo_prompt { sid what fast promptre } {
+  set tries 12
+  if { $fast } {
+    set timeout 1
+    expect {
+      -i ${sid} -re "\[\r\n\]*${promptre}" { return }
+      timeout { }
+    }
+  }
+  set timeout 5
+  for {set i 0} {$i < $tries} {incr i} {
+    send -i ${sid} "echo ?  $i  ?\n"
+    expect {
+      -i ${sid}
+      -re "\\? $i \\?\[\r\n\]*${promptre}" { break }
+      -re ".*\[\r\n\]" { exp_continue -continue_timer }
+      timeout { }
+    }
+  }
+  if {$i == $tries} {
+    return -code error "Failed to synchronize with ${what}"
+  }
+}
+
+package require base64
+package require cmdline
+set cmd_params {
+  { board.arg "" "Set the board directory, DIR, in /dev/morello/\$DIR/tty-*" }
+  { loader-script.arg "" "loader(8) script to run instead of \"boot\"" }
+  { nfs-root.arg "" "Set the NFS root" }
+  { ssh-ecdsa.arg "" "SSH ECDSA private key file to land on the board" }
+  { dhcp-out.arg "" "Write DHCP address to given file" }
+  { lurk "Fork and linger on UART after machine arrives at login: prompt" }
+  { panic-kill.arg "" "With Lurk; if PID given, kill it on panic" }
+}
+if {[catch {array set cmdopts [cmdline::getoptions ::argv $cmd_params]}]} {
+  send_user [cmdline::usage $cmd_params]
+  exit 1
+}
+if {0 == [string length "${cmdopts(board)}" ]} {
+  send_user "Must specify --board\n"
+  exit 1
+}
+if {0 == [string length "${cmdopts(nfs-root)}" ]} {
+  send_user "Must specify --nfs-root\n"
+  exit 1
+}
+
+set stty_init "raw -echo"
+set board_dir "/dev/morello/${cmdopts(board)}"
+set socat_common "b115200,sane,cfmakeraw,clocal,echo=0"
+
+spawn "socat" "STDIO" "${board_dir}/tty-ap0,${socat_common},crtscts=0"
+set sap ${spawn_id}
+
+# Try to synchronize with the loader prompt.  Since an unknown amount of time
+# and bytes have gone by since we were loaded over UEFI, this is a bit of a
+# game.  To ensure that the board doesn't race ahead, we set, in loader.conf,
+#   autoboot_delay="NO"
+# To ease our synchronization game, we set
+#   beastie_disable="YES"
+#   prompt="CheriBSD>"
+# We rely on the elimination of duplicate space in echo commands to
+# distinguish character echo from proper response.
+proc wait_for_loader_prompt { sid } {
+  return sync_with_echo_prompt ${sid} "loader prompt" 0 "CheriBSD> "
+}
+
+send_user "===> Attempting to synchronize with bootloader\n"
+wait_for_loader_prompt ${sap}
+# OK, we're synchronized with the loader.
+
+# The cheribuild-produced MFS images have some optional steps we can turn off
+typeslow ${sap} "set cheribuild.skip_sshd=1\n"
+wait_for_loader_prompt ${sap}
+typeslow ${sap} "set cheribuild.skip_entropy=1\n"
+wait_for_loader_prompt ${sap}
+
+# Boot or run the specified script; these are not expected to return to prompt
+if {0 < [string length "${cmdopts(loader-script)}" ]} {
+  typeslow ${sap} "include ${cmdopts(loader-script)}\n"
+} else {
+  send -i ${sap} "boot\n"
+}
+
+# Can't just wait for "#" immediately, since it shows up in dmesg, so get us
+# past that point and then wait for it.
+set timeout 120
+wait_for_line_ex ${sap} "---<<BOOT>>---" "Waiting for kernel sign of life"
+send_user "===> Kernel alive\n"
+wait_for_line_ex ${sap} "Release APs" "Waiting for kernel SMP"
+send_user "===> Kernel SMP\n"
+
+# Snooze until the kernel stops spamming the console, since it tends to eat
+# parts of lines, which is really exciting.  This might gobble the first
+# shell prompt we see, but we'll actively probe it thereafter.
+#
+# Unfortunately, the situation is even worse: sometimes the kernel doesn't find
+# that it can boot from /dev/md0, but it's there, we just need to tell it.
+#
+# So, we're going to wait until we have seen *both* the end of probing burst
+# and a shell, and if we see a "mountroot>" prompt in the middle, we're going to
+# answer it.
+set seen_uhub 0
+set seen_shell 0
+expect {
+  -i ${sap}
+  -ex "mountroot> " {
+    send -i ${sap} "ufs:/dev/md0\n"
+    exp_continue -continue_timer
+  }
+  -ex "uhub0: 8 ports" {
+    set seen_uhub 1
+    if { ! ${seen_shell} } { exp_continue }
+  }
+  -ex "# " {
+    set seen_shell 1
+    if { ! ${seen_uhub} } { exp_continue }
+  }
+  -re ".*\[\r\n\]" { exp_continue -continue_timer }
+}
+send_user "===> MFS shell loaded\n"
+
+proc wait_for_mfs_shell { sid } {
+  sync_with_echo_prompt ${sid} "MFS shell" 1 "# "
+}
+
+proc mfs_run { sid cmd } {
+  typeslow ${sid} "${cmd}\n"
+  wait_for_mfs_shell ${sid}
+}
+
+# Unset kenv vars set above for MFS
+mfs_run ${sap} "kenv -u cheribuild.skip_entropy"
+mfs_run ${sap} "kenv -u cheribuild.skip_sshd"
+
+# Seed some entropy into the machine
+if { 1 } {
+  set rf [open "/dev/urandom" r ]
+  typeslow ${sap} "cat >/dev/random <<HERE\n"
+  set r [read $rf 120]
+  close $rf
+  typeslow ${sap} "[::base64::encode -maxlen 0 $r]\nHERE\n"
+  wait_for_mfs_shell ${sap}
+}
+
+# Bring up the local storage
+mfs_run ${sap} "gpart destroy ada0 2>/dev/null || true"
+mfs_run ${sap} "geli onetime ada0"
+mfs_run ${sap} "gpart create -s gpt ada0.eli"
+mfs_run ${sap} "gpart add -i 1 -s 61G -t freebsd-swap -l eliswap ada0.eli"
+mfs_run ${sap} "gpart add -i 2 -t freebsd-ufs -l elimnt ada0.eli"
+
+# This one needs special handling because of a # in its output
+typeslow ${sap} "newfs /dev/gpt/elimnt\n"
+wait_for_mfs_shell ${sap}
+
+mfs_run ${sap} "mount /dev/gpt/elimnt /mnt"
+mfs_run ${sap} "mkdir -p /mnt/etc"
+
+# Send over the SSH key to use
+if {0 < [string length "${cmdopts(ssh-ecdsa)}" ]} {
+  typeslow ${sap} "cat >/mnt/etc/ssh_host_ecdsa_key <<HERE\n"
+  set kf [open "${cmdopts(ssh-ecdsa)}" r ]
+  while {[gets ${kf} kline] >= 0} { typeslow ${sap} "${kline}\n" }
+  close ${kf}
+  typeslow ${sap} "HERE\n"
+  wait_for_mfs_shell ${sap}
+}
+
+# Set the host name (before DHCP)
+mfs_run ${sap} "hostname ${cmdopts(board)}"
+
+# Set a hostuuid and hostid.  The kernel will use the hostuuid as the client
+# identifier for its root NFS mount.  We also lob this into kenv so that
+# /etc/rc.d/hostid preserves it.
+mfs_run ${sap} "sysctl kern.hostuuid=\$(uuidgen)"
+mfs_run ${sap} "kenv smbios.system.uuid=\$(sysctl kern.hostuuid)"
+
+# Bring up the network using bootloader-provided information.
+# The system will DHCP again when it boots rather than use this information;
+# we'll write our `ipaddr` file on *that* acquisition, in case it matters.
+mfs_run ${sap} \
+ "ifconfig re0 \$(kenv boot.netif.ip) netmask \$(kenv boot.netif.netmask) up"
+mfs_run ${sap} "route add default \$(kenv boot.netif.gateway)"
+
+# Pivot to NFS root
+mfs_run ${sap} "kenv vfs.root.mountfrom=nfs:${cmdopts(nfs-root)}"
+typeslow ${sap} "reboot -r\n"
+
+# Wait for DHCP and, if asked, write the bound address to a file.
+expect {
+  -i ${sap}
+  -re "Trying to mount root from ufs:/dev/md0" {
+    return -code error "Failed to pivot to NFS root!"
+  }
+  -re "bound to (\[^ \]*) -- renewal in\[^\r\n\]*" {
+    send_user "===> Got DHCP address ${expect_out(1,string)}\n"
+    if {0 < [string length "${cmdopts(dhcp-out)}"]} {
+      set df [open "${cmdopts(dhcp-out)}" w ]
+      puts ${df} "${expect_out(1,string)}"
+      close ${df}
+    }
+  }
+  -re ".*\[\r\n\]" { exp_continue -continue_timer }
+  timeout { return -code error "Timeout while waiting for DHCP address (2)" }
+}
+
+expect {
+  -i ${sap}
+  -re "login:" { send_user "===> machine booted\n" }
+  -re ".*\[\r\n\]" { exp_continue -continue_timer }
+  timeout { return -code error "Timeout waiting for login prompt" }
+}
+
+if {! ${cmdopts(lurk)}} {
+  exec kill [exp_pid -i ${sap}]
+  wait -i ${sap}
+  close ${sap}
+} else {
+  # Lurk by "daemonizing": fork and {exec, exit}.  This leaves both us, the
+  # child, and the socat on ${sid} detached from process control, though we
+  # still have socat's controlling terminal open.  When we close that (by
+  # exiting), it will receive SIGHUP and will go away; if it exits (for some
+  # reason), then we'll bail out of our expect and exit as well.
+  #
+  # If there isn't a panic, and all has gone well, we expect to be killed by
+  # process supervision so that the next use of the board doesn't interact with
+  # our lurking socat process.
+  set pid [fork]
+  if { ${pid} == 0 } {
+    set timeout -1
+    expect {
+      -i ${sap}
+      -re "^db> " {
+        send_user "===> PANIC!\n"
+        if { ${cmdopts(panic-kill)} != "" } {
+          send_user "===> Sending SIGTERM to ${cmdopts(panic-kill)}\n"
+          exec kill "-TERM" ${cmdopts(panic-kill)}
+        }
+      }
+      -re ".*\[\r\n\]" { exp_continue }
+    }
+  } else {
+    if { ${pid} < 0 } {
+      send_user "===> lurk fork() failed!\n"
+      exit 1
+    } else {
+      send_user "===> spawned ${pid} to lurk on UART\n"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e -u
+
+SELFDIR=$(dirname "$(readlink -f -- "$0")")
+
+while getopts 'd:l:n:s:' o; do
+  case "$o" in
+    d) MORELLO_HOSTNAME="${OPTARG}";;
+    ?) echo >&2 "Bad options"
+       exit 1;;
+  esac
+done
+
+exec "${SELFDIR}"/mcc-shutdown.expect --board "${MORELLO_HOSTNAME}"

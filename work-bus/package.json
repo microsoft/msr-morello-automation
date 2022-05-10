@@ -1,0 +1,12 @@
+{
+  "name": "msr-morello-work-bus",
+  "workspaces": [
+    "lib",
+    "client-utils",
+    "executor"
+  ],
+  "scripts": {
+    "build": "./build.sh",
+    "clean": "tsc --build --clean"
+  }
+}

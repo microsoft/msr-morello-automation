@@ -1,0 +1,7 @@
+#!/bin/sh
+
+set -e -u
+
+# Go ahead and bootstrap both package systems
+pkg64 bootstrap -y
+pkg64c bootstrap -y

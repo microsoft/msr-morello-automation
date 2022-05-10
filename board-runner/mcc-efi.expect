@@ -1,0 +1,332 @@
+#!/usr/bin/expect
+
+proc wait_for_one_ex { sid str why } {
+  expect {
+    -i ${sid} -ex ${str} {}
+    timeout { return -code error "Timeout: ${why}" }
+  }
+}
+
+proc typeslow { sid string } {
+  foreach char [split ${string} ""] {
+    send -i ${sid} -- "${char}"
+    wait_for_one_ex ${sid} ${char} "Waiting for typeslow echo"
+  }
+}
+
+proc wait_tui_frame { sid } {
+  wait_for_one_ex ${sid} "\x1b\[19;80H" "Waiting for UI frame"
+}
+
+proc wait_tui_confirm_dialog { sid } {
+  expect {
+    -i ${sid} -re "Press 'Y'.*---/" {}
+    timeout { return -code error "Waited too long for confirmation dialog" }
+  }
+}
+
+proc tui_hunt_menu_entry { sid target {mid "\x1b\[01C"} } {
+  send_user "Hunting for ${target}\n"
+  expect {
+    -i ${sid}
+    -ex "\x1b\[40m${mid}${target}" { }
+    -ex "\x1b\[19;80H" {
+      send -i ${sid} "v"
+      exp_continue -continue_timer
+    }
+    timeout { return -code error "Looking for menu target: ${target}" }
+  }
+  wait_tui_frame ${sid}
+  send -i ${sid} "\r"
+}
+
+# Like wait_for_one_ex but line-wise, to avoid accumulating and scanning noise
+proc wait_for_line_ex { sid str why } {
+  expect {
+    -i ${sid}
+    -ex ${str} {}
+    -re ".*\[\r\n\]" { exp_continue -continue_timer }
+    timeout { return -code error "Timeout: ${why}" }
+  }
+}
+
+proc wait_uefi_prompt { sid } {
+  wait_for_line_ex ${sid} "Shell> " "Waiting for UEFI Shell prompt"
+}
+
+package require cmdline
+set cmd_params {
+  { board.arg "" "Set the board directory, DIR, in /dev/morello/\$DIR/tty-*" }
+  { boot-url.arg "" "Set the URL to the EFI loader program" }
+  { skip.arg "" "Skip parts of the boot process" }
+}
+if {[catch {array set cmdopts [cmdline::getoptions ::argv $cmd_params]}]} {
+  send_user [cmdline::usage $cmd_params]
+  exit 1
+}
+if {0 == [string length "${cmdopts(board)}" ]} {
+  send_user "Must specify --board\n"
+  exit 1
+}
+if {0 == [string length "${cmdopts(boot-url)}" ]} {
+  send_user "Must specify --boot-url\n"
+  exit 1
+}
+
+# This may help debug things if things go off the rails
+## exp_internal -f "rawlog" [exp_internal -info]
+
+set skips [split ${cmdopts(skip)} "," ]
+
+# Speak without cooked TTYs to the board's UART
+set stty_init "raw -echo"
+set board_dir "/dev/morello/${cmdopts(board)}"
+set socat_common "b115200,sane,cfmakeraw,clocal,echo=0"
+
+if { -1 == [lsearch -exact ${skips} "mcc" ] } {
+  spawn "socat" "STDIO" "${board_dir}/tty-mcc,${socat_common},crtscts=1"
+  set smc ${spawn_id}
+
+  send_user "===> MCC to prompt\n"
+  # Get the MCC to a prompt
+  set timeout 120
+  send -i ${smc} "\r"
+  expect {
+    -i ${smc} "Cmd>" { }
+    timeout { return -code error "MCC not at prompt" }
+  }
+
+  # Reboot the machine
+  send_user "===> MCC to reboot\n"
+  send -i ${smc} "reboot\r"
+  # This may seem excessive, but it allows for USB activity detection and timeout
+  set timeout 30
+  wait_for_line_ex ${smc} "Powering up system..." "MCC reboot not started"
+}
+
+spawn "socat" "STDIO" "${board_dir}/tty-ap0,${socat_common},crtscts=0"
+set sap ${spawn_id}
+
+if { -1 == [lsearch -exact ${skips} "mcc" ] } {
+  send_user "===> Awaiting boot\n"
+  # While waiting for the system to boot, drain the AP UART
+  set timeout 240
+  expect {
+    -i ${smc}
+    "Board powered down, use REBOOT to restart." {
+      return -code error "MCC did not power up the board"
+    }
+    "Cmd>" { }
+    -i ${sap} "..*" { exp_continue -continue_timer }
+    -i ${smc} -re ".*\[\r\n\]" { exp_continue -continue_timer }
+    timeout { return -code error "MCC restart took to long" }
+  }
+
+  # Hang up on the MCC; we're done with it.
+  send_user "===> Booted, hang up on MMC\n"
+  set smcpid [exp_pid -i ${smc}]
+  exec kill ${smcpid}
+  wait -i ${smc}
+  close ${smc}
+}
+
+if { -1 != [lsearch -exact ${skips} "uefiescape" ] } {
+  # This can fake the boot if you leave us at the main menu instead
+  set timeout 1
+  expect -i ${sap} "..*" { exp_continue -continue_timer }
+} else {
+  send_user "===> Wait for AP to boot to UEFI ESCAPE\n"
+  # Wait for the AP to boot through EFI
+  set timeout 600
+  wait_for_line_ex ${sap} "Press ESCAPE" "AP to reach UEFI ESCAPE prompt"
+  send -i ${sap} "\x1b"
+
+  # Wait for the menu to draw itself
+  # There isn't a lot of extra noise here, so don't bother with draining lines
+  # while waiting.
+  wait_tui_frame ${sap}
+}
+
+### OK, now drive the TUI
+set timeout 10
+
+# This is hackish, but: because we consumed the frame above while waiting
+# for the TUI, we need it to regenerate one for the subsequent hunt.
+send -i ${sap} "^"
+tui_hunt_menu_entry ${sap} "Boot Manager"
+
+# Switch to the UEFI shell and configure DHCP
+
+## The boot entries do not have cursor forward commands between their
+## "select graphic rendition" and the text body, unlike the other menus, so pass
+## the empty string for ${mid} to tui_hunt_menu_entry
+tui_hunt_menu_entry ${sap} "UEFI Shell" ""
+expect {
+  -i ${sap}
+  "any other key to continue" { send -i ${sap} " " }
+  timeout { return -code error "Waiting for UEFI Shell load indication" }
+}
+wait_uefi_prompt ${sap}
+
+send -i ${sap} "ifconfig -s eth0 dhcp\r"
+wait_uefi_prompt ${sap}
+
+set timeout 30
+send -i ${sap} "ifconfig -l eth0\r"
+expect {
+  -i ${sap}
+  -re "ipv4 address : .*\x1b\\\[40m(\[0-9.\]*)\[\r\n\]" {
+    set ipa ${expect_out(1,string)}
+    wait_uefi_prompt ${sap}
+    if { "0.0.0.0" eq ${ipa} } {
+      sleep 1
+      send -i ${sap} "ifconfig -l eth0\r"
+      exp_continue -continue_timer
+    }
+  }
+  -re "Shell> " { return -code error "ifconfig gone awry" }
+  timeout { wait_uefi_prompt ${sap}; return -code error "Failed to DHCP" }
+}
+
+## Look to see if we need to create a boot entry; some boards do not persist
+## their EFI NVRAM across power cycles, but some do.  If it's been persisted,
+## it may be wrong now.
+set prune_boot_entry -1
+set needs_boot_entry 1
+send -i ${sap} "bcfg boot dump\r"
+expect {
+  -i ${sap}
+  -re "Option: (\x1b\\\[\[0-9\]*m)*(\[^\x1b\]*)(\x1b\\\[\[0-9\]*m)*\. Variable:\[^\n\]*\n" {
+    set devix ${expect_out(2,string)}
+    expect {
+      -i ${sap}
+      -re "  Desc    - (\[^\n\r\]*)\r\n" {
+        set devdesc ${expect_out(1,string)}
+        expect {
+          -i ${sap}
+          -re "  DevPath - (\[^\n\r\]*)\r\n" {
+            set devpath ${expect_out(1,string)}
+            expect {
+              -i ${sap}
+              -re "^  Optional- \[YN\]\r\n" { }
+              -re "(\[^\n\r\]*)\r\n" {
+                set devpath "${devpath}${expect_out(1,string)}"
+                exp_continue -continue_timer
+              }
+            }
+            if { "UEFI HTTP manumagic" eq ${devdesc} } {
+              if {[regexp ".*/Uri\\\(${cmdopts(boot-url)}\\\)\$" "${devpath}" ]} {
+                set needs_boot_entry 0
+              } else {
+                set prune_boot_entry $devix
+              }
+            }
+          }
+        }
+      }
+    }
+    exp_continue -continue_timer
+  }
+  -re "Shell> " { }
+  timeout { return -code error "Could not check boot entries" }
+}
+
+if { ${prune_boot_entry} != -1 } {
+  send -i ${sap} "bcfg boot rm ${prune_boot_entry}\r"
+  wait_uefi_prompt ${sap}
+}
+
+## Back to the TUI, now that the network is up
+set timeout 5
+send -i ${sap} "exit\r"
+
+if { ${needs_boot_entry} == 1 } {
+  # Add a boot entry using the menus, since it seems not possible to do this
+  # at the UEFI Shell.  Sigh.
+
+  # Take us back to the main menu
+  wait_tui_frame ${sap}
+  send -i ${sap} "\x1b"
+
+  # Find the device manager
+  tui_hunt_menu_entry ${sap} "Device Manager"
+
+  # Find the network settings
+  tui_hunt_menu_entry ${sap} "Network Device List"
+
+  # There is only one network device, so go to it
+  send -i ${sap} "\r"
+  wait_tui_frame ${sap}
+
+  # Punch in the HTTP boot URL, slowly
+  tui_hunt_menu_entry ${sap} "HTTP Boot Configuration"
+  send -i ${sap} "\r"
+  wait_tui_frame ${sap}
+  typeslow ${sap} " manumagic"
+  send -i ${sap} "\r"
+  wait_tui_frame ${sap}
+  send -i ${sap} "vv\r"
+  typeslow ${sap} ${cmdopts(boot-url)}
+  send -i ${sap} "\r"
+  wait_tui_frame ${sap}
+
+  # Save changes: F10, Y at dialog
+  send -i ${sap} "\x1b\[21~"
+  wait_tui_confirm_dialog ${sap}
+  send -i ${sap} "Y"
+  wait_tui_frame ${sap}
+
+  # Escape to network device
+  send_user "===> Escaping to network device"
+  send -i ${sap} "\x1b"
+  wait_tui_frame ${sap}
+
+  # Escape to network device list
+  send_user "===> Escaping to network device list"
+  send -i ${sap} "\x1b"
+  wait_tui_frame ${sap}
+
+  # Escape to device manager
+  send_user "===> Escaping to device manager"
+  send -i ${sap} "\x1b"
+  wait_tui_frame ${sap}
+
+  # Escape to main menu
+  send_user "===> Escaping to main menu"
+  send -i ${sap} "\x1b"
+
+  # And now back to the boot menu
+  tui_hunt_menu_entry ${sap} "Boot Manager"
+}
+
+# We're still (or again) at the boot menu, so find the entry we made above
+tui_hunt_menu_entry ${sap} "UEFI HTTP manumagic" ""
+
+proc wait_UEFI_loader_load {sid} {
+  send_user "===> Awaiting load over HTTP\n"
+  set timeout 30
+  expect {
+    -i ${sid}
+    -ex "Downloading...100%" { }
+    -ex "\x1b\[19;80H" { return -code error "EFI HTTP load failed" }
+    timeout { return -code error "Timeout waiting for EFI load over HTTP" }
+  }
+  send_user "===> EFI loader is loaded\n"
+}
+
+# Hang around until we see the loader prompt.  Sometimes we see SSL errors
+# that mean we don't come up correctly, but it seems to work the second time
+# through, so automate that dance.
+wait_UEFI_loader_load ${sap}
+set timeout 120
+expect {
+  -i ${sap}
+  -ex "OK " { return -code error "EFI loader failed to load configuration" }
+  -ex "CheriBSD> " { }
+  -re ".*\[\r\n\]" { exp_continue -continue_timer }
+}
+
+set sappid [exp_pid -i ${sap}]
+exec kill ${sappid}
+wait -i ${sap}
+close ${sap}
