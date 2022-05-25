@@ -203,7 +203,7 @@ mfs_run ${sap} "hostname ${cmdopts(board)}"
 # identifier for its root NFS mount.  We also lob this into kenv so that
 # /etc/rc.d/hostid preserves it.
 mfs_run ${sap} "sysctl kern.hostuuid=\$(uuidgen)"
-mfs_run ${sap} "kenv smbios.system.uuid=\$(sysctl kern.hostuuid)"
+mfs_run ${sap} "kenv smbios.system.uuid=\$(sysctl -n kern.hostuuid)"
 
 # Bring up the network using bootloader-provided information.
 # The system will DHCP again when it boots rather than use this information;
