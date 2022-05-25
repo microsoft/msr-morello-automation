@@ -39,12 +39,18 @@ This means, concretely:
 
 1. using the provided single parameter to
 
-   1. set the loader URL (to select the boot environment)
-   2. set loader script (to select the kernel from the boot environment),
-   3. set the NFS root (to select the userland).
+   1. arrange for the board to boot the appropriate HTTP export.  In our
+      cluster, each board has a constant HTTP URL associated with it, which
+      points at a symlink (in a ``tmpfs``) under this script's control.
 
-   Usually the loader URL usually names a path within the NFS root, though this
-   is not, strictly, required.
+   2. set loader script (to select the kernel from within that HTTP export),
+
+   3. set the NFS root (to select the userland).  Despite the symlink game
+      being played for the HTTP export, no similar game is necessary for NFS,
+      as the NFS paths are not persisted to on-board flash memory.
+
+   Usually the loader URL usually names (after symlink chasing) a path within
+   the NFS root, though this is not, strictly, required.
 
 2. targeting the executor itself for termination if the board panics.  This is
    done by noting that the executor is the parent process of the
