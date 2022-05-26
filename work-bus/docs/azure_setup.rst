@@ -270,6 +270,57 @@ Identity from above.
    against key exfiltration (restricted file ownership and permissions, limited
    access to the machine bearing keys, &c).
 
+.. _work-bus/docs/azure_setup/service_princ_mk:
+
+Creating a Service Principal
+============================
+
+Create a new Azure AD Service Principal with the following.  While a default
+Scope and Role are not, strictly, required, it is polite to set them to our
+resource group. ::
+
+   New-AzADServicePrincipal -Scope $resgrp.ResourceId -Role Reader `
+     -DisplayName ...
+
+A service principal can be looked up by display name::
+
+   $sp = Get-AzADServicePrincipal -Displayname ...
+
+The ``Id`` field on a service principal object, rather than its display name,
+is what most other things will require.
+
+.. note::
+
+   Service principals are global to a tennant's entire AD, rather than scoped
+   to any associated Subscription or Resource Group.
+
+.. _work-bus/docs/azure_setup/service_princ_sec:
+
+Service Principal Client Secrets
+================================
+
+If ``$sp`` holds the service principal object, then it should suffice to run
+something like this to create a credential with a particular lifetime::
+
+   $sppw = New-AzADSpCredential -ObjectId $sp.Id `
+     -EndDate ((get-date) + (New-TimeSpan -Days 70))
+   $sppw.SecretText
+
+The ``SecretText`` field is not available on the result of
+``Get-AzADSpCredential``, so be prepared to copy it out now.  You may wish to
+make note of the ``$sppw.KeyId``, too, to rotate or remove the secret, later.
+
+.. note::
+
+   Due to what appears to be an ignored Azure bug, these credentials will not
+   be reflected in the Azure portal, but can be used all the same.  Excitement
+   abounds.  See https://github.com/MicrosoftDocs/azure-docs/issues/41433 and
+   https://github.com/Azure/azure-powershell/issues/11825.
+
+It is good hygene to use ``Get-AzADSpCredential -ObjectId $sp.Id`` to list all
+outstanding keys and to use ``Remove-AzADSpCredential -ObjectId $sp.Id -KeyId
+...`` to remove all but those actively in use.
+
 .. _work-bus/docs/azure_setup/service_princ_env:
 
 Environment Variables
@@ -290,38 +341,16 @@ variables:
    (Not to be confused with the ``Id`` field.)
 
 ``AZURE_CLIENT_SECRET``
-   must hold the per-client secret.  If ``$sp`` holds the service principal
-   object, then it should suffice to run something like this to create a
-   credential with a particular lifetime::
-
-     $sppw = New-AzADSpCredential -ObjectId $sp.Id `
-       -EndDate ((get-date) + (New-TimeSpan -Days 70))
-     $sppw.SecretText
-
-   The ``SecretText`` field is not available on the result of
-   ``Get-AzADSpCredential``, so be prepared to copy it out now.
-
-   Due to what appears to be an ignored Azure bug, these credentials will not
-   be reflected in the Azure portal, but can be used all the same.  Excitement
-   abounds.  See https://github.com/MicrosoftDocs/azure-docs/issues/41433 and
-   https://github.com/Azure/azure-powershell/issues/11825.
+   must hold the per-client secret obtained as per
+   :ref:`work-bus/docs/azure_setup/service_princ_sec` above.
 
 For the Executor
 ================
 
-Create a new Azure AD Service Principal for :doc:`the executor <executor>` with
-the following.  Note that such things are AD-wide, so choose a display name
-perhaps more informative than ``morello-executor`` as here.  While a default
-Scope and Role are not, strictly, required, it is polite to set them to our
-resource group. ::
-
-   New-AzADServicePrincipal -Scope $resgrp.ResourceId -Role Reader `
-     -DisplayName morello-executor
-
-   $exsp = Get-AzADServicePrincipal -Displayname morello-executor
-   $exsp.Id
-
-:doc:`The executor <executor>` requires...
+Having :ref:`created <work-bus/docs/azure_setup/service_princ_mk>` a service
+principal for :doc:`the executor <executor>`, we must grant it some roles so
+that it may use the other resources we have created, above.  Specifically, it
+will require...
 
 * read access to the work submission topic::
 

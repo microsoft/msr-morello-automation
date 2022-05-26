@@ -104,7 +104,9 @@ Tools Here
 
    If you are using client secrets or keys to identify as an Azure service
    principal, this drop-in mechanism can also be used to set the :ref:`required
-   environment variables <work-bus/docs/azure_setup/service_princ_env>`.  Be
+   environment variables <work-bus/docs/azure_setup/service_princ_env>`.
+   Because systemd does not consider configuration secret, you must use an
+   ``EnvironmentFile`` to set ``AZURE_CLIENT_SECRET`` securely.  Be
    sure to restrict its ownership and permissions (probably to just
    ``root:root`` and ``0600``).
 
