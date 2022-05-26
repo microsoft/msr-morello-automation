@@ -127,7 +127,7 @@ function makeCompletionPromise(
 
   /* If there isn't a completion session defined, don't wait on anything */
   if (completionFrom === undefined) {
-    return new Promise(() => {})
+    return undefined
   }
 
   return new Promise( async (resolve) => {
@@ -161,23 +161,28 @@ function makeCompletionPromise(
     const pCompMsg = makeCompletionPromise(
       sbClient, argv, dispRes.completionFrom);
 
-    console.error("work-bus executor: racing job against completion...");
-    const v = await Promise.race([pCompMsg, dispRes.promise]);
+    if (pCompMsg !== undefined) {
+      console.error("work-bus executor: racing job against completion...");
+      const v = await Promise.race([pCompMsg, dispRes.promise]);
 
-    console.log("work-bus executor: race finished:",
-      [pCompMsg, dispRes.promise]);
-    process.exitCode = <number> v;
+      console.log("work-bus executor: race finished:",
+        [pCompMsg, dispRes.promise]);
+      process.exitCode = <number> v;
 
-    /*
-     * Linger until we get the completion message so that it doesn't remain in
-     * the service bus.  It's possible that we already have it, if it won the
-     * race, above.  On the other hand, don't wait forever for a message that's
-     * not coming, if something has gone wrong; just bail.
-     */
-    await Promise.race([
-      pCompMsg,
-      new Promise<void>((r) => { setTimeout(r, 60000) })
-    ]);
+      /*
+       * Linger until we get the completion message so that it doesn't remain in
+       * the service bus.  It's possible that we already have it, if it won the
+       * race, above.  On the other hand, don't wait forever for a message that's
+       * not coming, if something has gone wrong; just bail.
+       */
+      await Promise.race([
+        pCompMsg,
+        new Promise<void>((r) => { setTimeout(r, 60000) })
+      ]);
+    } else {
+      console.error("work-bus executor: job has no completion message");
+      process.exitCode = await dispRes.promise;
+    }
   } finally {
     await sbClient.close()
   }
