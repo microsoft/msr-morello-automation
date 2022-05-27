@@ -28,6 +28,7 @@ MSR Cambridge Morello Cluster
 
    misc-docs/tpm-hsm
    misc-docs/uefi-tls
+   misc-docs/links
 
 .. toctree::
    :maxdepth: 1
