@@ -1,6 +1,18 @@
 #!/bin/sh
 set -u
-exec ssh -o BatchMode=yes \
+
+try_ssh_conf() {
+  if [ -r "$1" ]; then SSH_CONF_FILE="$1"; fi
+}
+
+if [ -n "${MORELLO_SCRIPTS-}" ]; then
+  try_ssh_conf "${MORELLO_SCRIPTS}/local/ssh.config"
+else
+  SELFDIR=$(dirname "$(readlink -f -- "$0")")
+  try_ssh_conf "${SELFDIR}/../local/ssh.config"
+fi
+
+exec ssh ${SSH_CONF_FILE+-F "${SSH_CONF_FILE}"} \
+  -o BatchMode=yes \
   -o UserKnownHostsFile="${RUNTIME_DIRECTORY}"/ssh_known_hosts \
-  -i ${MORELLO_SSH_USER_KEY-~morello-auto/.ssh/id_ecdsa} \
   root@"$(cat "${RUNTIME_DIRECTORY}"/ipaddr)" "$@"

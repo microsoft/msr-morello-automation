@@ -213,10 +213,11 @@ This script assumes that the environment variable ``RUNTIME_DIRECTORY`` is set
 to an absolute path containing the SSH known-hosts file and DHCP address as
 created by :ref:`board-runner/README/run.init`, above.
 
-Optionally, the environment variable ``MORELLO_SSH_USER_KEY`` may be set to
-name a SSH key file other than the default (owned by the ``morello-auto``
-user).  This is useful when running by hand as another user, to point at a
-suitably owned and permissioned copy of the cluster key.
+The script will direct ``ssh`` to load, as a configuration file, the first of
+``${MORELLO_SCRIPTS}/local/ssh.config`` or ``../local/ssh.config`` relative to
+itself to exist, using ``-F``, and so supplanting the default ``~/.ssh/config``
+parsing (if desired, it can be ``Include``-ed).  This is expecially useful in
+combination with :ref:`ssh keys in the TPM <misc-docs/tpm-hsm/ssh>`.
 
 A Note On Shutdown
 ##################

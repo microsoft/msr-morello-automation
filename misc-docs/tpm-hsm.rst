@@ -32,14 +32,26 @@ Initialize a "primary" on the TPM; this command will return a "primary ID"::
 
 Create a token, giving it a label, user PIN, and security-officer PIN::
 
-    tpm2_ptool addtoken --pid=1 --label=$TOKEN_LABEL \
-      --userpin=abracadabra --sopin=hocuspocus
+    tpm2_ptool addtoken --pid=1 \
+      --label=$TOKEN_LABEL --userpin=abracadabra --sopin=hocuspocus
 
 Create a key (use ``--algorithm=help`` to see supported algorithms)::
 
-    tpm2_ptool addkey --algorithm=rsa2048 --label=$TOKEN_LABEL --userpin=abracadabra
+    tpm2_ptool addkey --label=$TOKEN_LABEL --userpin=abracadabra \
+      --key-label=mykey --algorithm=rsa2048
 
-This will spit out a key ID (``CKA_ID``).
+Vary ``--key-label`` to taste.  This will spit out a key ID (``CKA_ID``).
+
+Ingesting Keys Instead
+======================
+
+Occasionally one is handed a private key rather than being expected to supply a
+public one.  In this scenario, you can use something like ::
+
+    tpm2_ptool import --label=$TOKEN_LABEL --userpin=abracadabra \
+      --key-label=... --algorithm=ecc --private=$PRIVATE_KEY_FILE
+
+This, too, spits out a key ID.
 
 Creating Certificates Using openssl
 ###################################
@@ -55,6 +67,15 @@ following.  You'll need the user PID for the token from above.  ::
 
     openssl req -engine pkcs11 -keyform engine -new -nodes -x509 -sha256 \
       -key 1:${CKA_ID} -days 3650 -subj "/CN=..."
+
+OpenSSH Public Key Format
+=========================
+
+You can also read out the public keys in OpenSSH format with ::
+
+   ssh-keygen -D /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
+
+The comment will contain the ``--key-label``.
 
 nginx
 #####
@@ -118,3 +139,23 @@ configuration language.
 
   The ``http`` in the ``pkcs11`` URI is the ``$TOKEN_LABEL``, the rest is
   hard-coded noise for the vTPM exposed by HyperV.  YMMV.
+
+.. _misc-docs/tpm-hsm/ssh:
+
+ssh
+###
+
+Rather than using ``~/.ssh/id_*`` files, we can push SSH keys into our (v)TPM,
+too, at least since `OpenSSH v5.4p1
+<https://github.com/openssh/openssh-portable/blob/d13d995a202c562c80d7e7a11c43504c505481d1/ChangeLog#L235>`_
+from 2010.
+
+Follow the instructions for `Creating Keys Using tpm2_ptool`_ above, running
+these commands as the user who will be running SSH, and using ``ssh`` for the
+``$TOKEN_LABEL``, and leaving ``userpin`` *empty* (that is, ``--userpin ''``)
+unless you want ``ssh`` to prompt for a PIN or use its ``SSH_ASKPASS``
+mechanism.  The TPM PKCS11 glue files will end up in ``$HOME/.tpm2_pkcs11/``.
+
+While it suffices to pass something like ``-I
+/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so`` to ``ssh``, you will probably be
+better off using a ssh configuration file.
