@@ -168,7 +168,11 @@ if { 1 } {
   typeslow ${sap} "cat >/dev/random <<HERE\n"
   set r [read $rf 120]
   close $rf
-  typeslow ${sap} "[::base64::encode -maxlen 0 $r]\nHERE\n"
+  set lu [log_user -info ]
+  log_user 0
+  typeslow ${sap} "[::base64::encode -maxlen 0 $r]\n"
+  log_user $lu
+  typeslow ${sap} "HERE\n"
   wait_for_mfs_shell ${sap}
 }
 
@@ -190,7 +194,10 @@ mfs_run ${sap} "mkdir -p /mnt/etc"
 if {0 < [string length "${cmdopts(ssh-ecdsa)}" ]} {
   typeslow ${sap} "cat >/mnt/etc/ssh_host_ecdsa_key <<HERE\n"
   set kf [open "${cmdopts(ssh-ecdsa)}" r ]
+  set lu [log_user -info ]
+  log_user 0
   while {[gets ${kf} kline] >= 0} { typeslow ${sap} "${kline}\n" }
+  log_user $lu
   close ${kf}
   typeslow ${sap} "HERE\n"
   wait_for_mfs_shell ${sap}
