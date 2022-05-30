@@ -10,4 +10,10 @@ export interface DispatchResult {
    * be posted.  Recall ../docs/executor.rst .
    */
   completionFrom: string | undefined;
+
+  /*
+   * Optional cleanup thunk, run after racing promise and receipt of a message
+   * as directed by completionFrom.
+   */
+  cleanup?(): Promise<void>;
 }

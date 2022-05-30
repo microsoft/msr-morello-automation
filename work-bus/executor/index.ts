@@ -183,6 +183,10 @@ function makeCompletionPromise(
       console.error("work-bus executor: job has no completion message");
       process.exitCode = await dispRes.promise;
     }
+
+    if (dispRes.cleanup !== undefined) {
+      await dispRes.cleanup();
+    }
   } finally {
     await sbClient.close()
   }
