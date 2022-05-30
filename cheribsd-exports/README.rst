@@ -139,6 +139,7 @@ stanza::
   pkg_env : {
     http_proxy: "http://PROXY:3128/"
   }
+
 ..
 
 However, because our boards mount ``nullfs``-es over ``/usr/local`` and
@@ -148,6 +149,7 @@ these files.  This script is ordered by::
 
   # REQUIRE: msr-morello-pre-net
   # BEFORE: NETWORKING
+
 ..
 
 so that it runs after the ``msr-morello-pre-net`` script from above but before
