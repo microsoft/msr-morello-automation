@@ -132,12 +132,16 @@ The preparation step is split between the executor itself and the
 (``--github_appid``) and public key (``--github_key``) to be specified as well.
 Armed with those, the executor can construct short-lived runner registration
 tokens that are then fed to the ``--github_prepare``-specified command.  This
-command, in order, takes as arguments
+command, in order, takes as arguments...
 
-1. the *name* of the runner to register;
-2. the *labels*, as a comma-separated list, to provide to GitHub;
-3. the repository, named by its "HTML url"; and
-4. the github API registration token.
+* the word "configure", in which case the next four arguments must be
+
+  1. the *name* of the runner to register;
+  2. the *labels*, as a comma-separated list, to provide to GitHub;
+  3. the repository, named by its "HTML url"; and
+  4. the github API registration token.
+
+* the word "remove", in which case subsequent arguments are ignored.
 
 Our specific instance of this script is available as
 :download:`../executor/github-prepare.sh`, but note that it expects to find

@@ -38,7 +38,7 @@ async function makeSettings(
   await removeSettings();
 
   const runprep = spawn(prepare,
-    [id, labels.join(/* with commas */), repo_url, token],
+    ["configure", id, labels.join(/* with commas */), repo_url, token],
     { shell: false
     , timeout: 30000
     , stdio: ["ignore", "inherit", "inherit"]
@@ -131,7 +131,7 @@ export async function prepare(
       });
     await new Promise( (resolve) => runxfer.on("exit", resolve) );
     await fs.closeSync(sf);
-    await removeSettings();
+    // Leave settings.json here for cleanup, below
   }
 
   const runp = new Promise<number>( (resolve) => {
@@ -145,7 +145,32 @@ export async function prepare(
     });
   });
 
+  async function cleanup(): Promise<void> {
+    /*
+     * Ask the action runner to remove itself.  This may fail if the runner
+     * on the board has already completed its job, but it shouldn't hurt to
+     * ask twice.
+     */
+    const run = spawn(argv.github_prepare as string, ["remove"],
+      { shell: false
+      , timeout: 30000
+      , stdio: ["ignore", "inherit", "inherit"]
+      });
+    await new Promise<void>((resolve) =>
+      run.on("exit", (v:number) => {
+        console.log("work-bus executor github: runner removed", v);
+        resolve()
+      }));
+
+    /*
+     * It's quite likely that settings.json is gone by now, but just in case,
+     * remove it explicitly.
+     */
+    await removeSettings();
+  }
+
   return { completionFrom: `github-${runnerName}`
          , promise: runp
+         , cleanup: cleanup
          };
 }
