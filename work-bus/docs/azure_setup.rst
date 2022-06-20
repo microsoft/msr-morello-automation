@@ -86,13 +86,13 @@ need to call constructors and occasionally post-factually update objects.
   :doc:`github-reflector`.::
 
     $stacc = New-AzStorageAccount -ResourceGroupName $resgrp.ResourceGroupName `
-      -Location 'UK South' -Kind StorageV2 -AccessTier Hot -SKU Standard_LRS `
-      -AllowBlobPublicAccess 0 -Name morellogithubstorage
+      -Kind StorageV2 -AccessTier Hot -SKU Standard_LRS `
+      -AllowBlobPublicAccess 0 -Location 'UK South' -Name morellogithubstorage
 
     $ghfn = New-AzFunctionApp -ResourceGroupName morello-github `
-      -StorageAccountName $stacc.StorageAccountName -Location 'UK South' `
-      -OSType Linux -Runtime node -RuntimeVersion 14 -FunctionsVersion 4 `
-      -Name morello-github-entryfn
+      -StorageAccountName $stacc.StorageAccountName -OSType Linux `
+      -Runtime node -RuntimeVersion 14 -FunctionsVersion 4 `
+      -Location 'UK South' -Name morello-github-entryfn
 
     Set-AzWebApp -AssignIdentity $true -Name $ghfn.Name `
       -ResourceGroupName $resgrp.ResourceGroupName
@@ -348,9 +348,9 @@ For the Executor
 ================
 
 Having :ref:`created <work-bus/docs/azure_setup/service_princ_mk>` a service
-principal for :doc:`the executor <executor>`, we must grant it some roles so
-that it may use the other resources we have created, above.  Specifically, it
-will require...
+principal for :doc:`the executor <executor>`, ``$exsp``, we must grant it some
+roles so that it may use the other resources we have created, above.
+Specifically, it will require...
 
 * read access to the work submission topic::
 
@@ -363,3 +363,22 @@ will require...
      -Scope $wqc.Id -ObjectId $exsp.Id
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Sender" `
      -Scope $wqc.Id -ObjectId $exsp.Id
+
+Optionally, we may grant this service principal access to the
+
+* github reflector's debug queue::
+
+   New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Receiver" `
+     -Scope $wqghd.Id -ObjectId $exsp.Id
+
+* cosmos database tables::
+
+    New-AzCosmosDBSqlRoleAssignment -ResourceGroupName $resgrp.ResourceGroupName `
+      -AccountName $cdbacc.Name -PrincipalId $exsp.Id `
+      -RoleDefinitionName "Cosmos DB Built-in Data Reader" `
+      -Scope "/dbs/$(${ghacldb}.Name)/colls/$(${ghaclown}.Name)"
+
+    New-AzCosmosDBSqlRoleAssignment -ResourceGroupName $resgrp.ResourceGroupName `
+      -AccountName $cdbacc.Name -PrincipalId $exsp.Id `
+      -RoleDefinitionName "Cosmos DB Built-in Data Reader" `
+      -Scope "/dbs/$(${ghacldb}.Name)/colls/$(${ghaclrepo}.Name)"
