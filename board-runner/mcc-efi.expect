@@ -170,16 +170,26 @@ wait_uefi_prompt ${sap}
 
 send -i ${sap} "ifconfig -s eth0 dhcp\r"
 wait_uefi_prompt ${sap}
+send -i ${sap} "ifconfig -r eth0\r"
+wait_uefi_prompt ${sap}
 
-set timeout 30
+set timeout 60
 send -i ${sap} "ifconfig -l eth0\r"
+set i 0
 expect {
   -i ${sap}
   -re "ipv4 address : .*\x1b\\\[40m(\[0-9.\]*)\[\r\n\]" {
     set ipa ${expect_out(1,string)}
     wait_uefi_prompt ${sap}
-    if { "0.0.0.0" eq ${ipa} } {
-      sleep 1
+    if { "0.0.0.0" eq "${ipa}" || "" eq "${ipa}" } {
+      if { 5 == $i } {
+        send -i ${sap} "ifconfig -r eth0\r"
+        wait_uefi_prompt ${sap}
+        set i 0
+      } else {
+        incr i
+        sleep 2
+      }
       send -i ${sap} "ifconfig -l eth0\r"
       exp_continue -continue_timer
     }
