@@ -2,8 +2,8 @@
 Description=Morello work-queue and board-runner
 After=dev-morello-%i-tty\x2dmcc.device
 After=dev-morello-%i-tty\x2dap0.device
-Requires=dev-morello-%i-tty\x2dmcc.device
-Requires=dev-morello-%i-tty\x2dap0.device
+BindsTo=dev-morello-%i-tty\x2dmcc.device
+BindsTo=dev-morello-%i-tty\x2dap0.device
 
 [Install]
 WantedBy=multi-user.target
