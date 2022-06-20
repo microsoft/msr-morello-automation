@@ -3,6 +3,7 @@
  */
 
 import { CosmosClient } from "@azure/cosmos"
+import { EnvironmentCredential } from "@azure/identity"
 import type { Arguments } from "yargs"
 
 import assert = require("assert")
@@ -11,8 +12,10 @@ exports.command = "list-github-webhook-acls"
 exports.desc = "Dump the WebHook ACLs currently stored in the Azure Cosmos DB."
 exports.builder =
   { dbconn: { type: "string"
-            , demandOption: true
             , describe: "Cosmo DB connection string"
+            }
+  , dbacct: { type: "string"
+            , describe: "Cosmo DB account name; will use EnvironmentCredential"
             }
   , db: { type: "string"
         , default: "GitHubWebHookDB"
@@ -21,7 +24,18 @@ exports.builder =
   }
 
 exports.handler = async function (argv: Arguments) {
-  const client = new CosmosClient(argv.dbconn as string);
+  const client =
+    ("dbconn" in argv)
+    ? new CosmosClient(argv.dbconn as string)
+    : ("dbacct" in argv)
+      ? new CosmosClient(
+	 { endpoint: argv.dbacct as string
+         , aadCredentials: new EnvironmentCredential()
+         })
+      : undefined;
+  if (client === undefined) {
+    throw new Error("Need --dbconn or --dbacct");
+  }
   const db = client.database(argv.db as string);
 
   {
