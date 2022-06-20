@@ -20,7 +20,7 @@ The "high-level" resources::
 
     $ghacldb= Get-AzCosmosDBSqlDatabase `
       -ResourceGroupName $resgrp.ResourceGroupName -AccountName $cdbacc.Name `
-      -Name GithubWebHookDB
+      -Name GitHubWebHookDB
 
     $ghfn   = Get-AzFunctionApp -ResourceGroupName $resgrp.ResourceGroupName `
       -Name morello-github-entryfn
@@ -112,7 +112,7 @@ need to call constructors and occasionally post-factually update objects.
   ::
 
     $bus = New-AzServiceBusNamespace `
-      -ResourceGroupName $resgrp.ResourceGroupName ` -Location 'UK South' `
+      -ResourceGroupName $resgrp.ResourceGroupName -Location 'UK South' `
       -SkuName Standard -Name morello-github-bus
 
     $wqghd = New-AzServiceBusQueue -ResourceGroupName $resgrp.ResourceGroupName `
@@ -138,7 +138,7 @@ need to call constructors and occasionally post-factually update objects.
     $wqqdefrule = Get-AzServiceBusRule -ResourceGroupName $resgrp.ResourceGroupName `
       -Namespace $bus.Name -Topic $wqq.Name -Subscription msr-morello `
       -Name '$Default'
-    $wqqdefrule.SqlFilter.SqlExpression = 'sys.Label = "msr-morello"'
+    $wqqdefrule.SqlFilter.SqlExpression = "sys.Label = 'msr-morello'"
     Set-AzServiceBusRule -ResourceGroupName $resgrp.ResourceGroupName `
       -Namespace $bus.Name -Topic $wqq.Name -Subscription msr-morello `
       -Name 'msr-morello' -InputObject $wqqdefrule
