@@ -79,6 +79,17 @@ async function waitAndPrepare(sb: ServiceBusClient, argv: yargs.Arguments) {
 
     console.error("work-bus executor: dispatching prepare...", mbody);
 
+    /*
+     * Every three minutes while we're still waiting, prevent the work request
+     * from timing out and going to another worker.
+     */
+    const keepalive = lib.TimeUtils.periodically(180000, () => {
+      (async () => {
+        console.error("work-bus executor still waiting on prepare");
+        await sbQ.renewMessageLock(qmsg);
+      })();
+    });
+
     const dispRes = await dispatch.dispatchPrepare(argv, sb, mbody);
 
     /*
@@ -86,6 +97,7 @@ async function waitAndPrepare(sb: ServiceBusClient, argv: yargs.Arguments) {
      * make it here, the service bus will retry delivery to another listener
      * or will eventually time out.
      */
+    keepalive.stop();
     await sbQ.completeMessage(qmsg);
 
     return dispRes
