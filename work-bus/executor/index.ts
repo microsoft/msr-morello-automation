@@ -41,37 +41,11 @@ yargparse.option("remotecmd",
   });
 dispatch.dispatchYargs(yargparse);
 
-function withTimeout<T>(
- act: Promise<T>,
- timeMS: number,
- onTimeout: () => Promise<void>) {
-  let timeout : NodeJS.Timeout;
-  let timeoutRunningP : Promise<void> | undefined = undefined;
-
-  const timeoutP = new Promise<Promise<void>>((resolve) => {
-    timeout = setTimeout(() => {
-                timeoutRunningP = onTimeout();
-                resolve(timeoutRunningP);
-              }, timeMS);
-  });
-  const timeThen = timeoutP.then((p) => p);
-  const actThen = act.then(async (v) => {
-    clearTimeout(timeout); // cancel timeout if it hasn't happened yet
-    if (timeoutRunningP !== undefined) {
-      // timeout already fired; wait for it to finish (it may have already)
-      console.log("work-bus executor: timeout fired; awaiting...")
-      await timeoutRunningP
-    }
-    return v
-  });
-  return Promise.race([actThen, timeThen]).then(_ => actThen);
-}
-
 function withShutdown<T>(act: Promise<T>,
  timeMS: number,
  script: string | undefined) : Promise<T> {
   if (script === undefined) { return act; }
-  return withTimeout(act, timeMS, () => {
+  return lib.TimeUtils.withTimeout(act, timeMS, () => {
     console.error("work-bus executor: idle timeout; powering down board")
     const runboot = spawn(script as string,
       { shell: false
