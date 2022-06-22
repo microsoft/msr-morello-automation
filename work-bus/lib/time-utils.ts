@@ -27,3 +27,24 @@ export function withTimeout<T>(
   });
   return Promise.race([actThen, timeThen]).then(_ => actThen);
 }
+
+/*
+ * Call `f` separated by an interval of `timeMS` milliseconds until told to
+ * stop by invoking the `stop` field of its returned object.  This function
+ * never overlaps invocation of `f`.
+ */
+export function periodically (timeMS: number, f: () => void) {
+  let t : NodeJS.Timeout | undefined = undefined;
+  const stop = () => {
+    clearTimeout(t);
+    t = undefined;
+  };
+  const step = () => {
+    t = setTimeout(() => {
+      f();
+      if (t !== undefined) { step(); }
+    }, timeMS);
+  };
+  step();
+  return { stop: stop };
+};
