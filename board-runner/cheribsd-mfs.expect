@@ -37,10 +37,10 @@ proc sync_with_echo_prompt { sid what fast promptre } {
   }
   set timeout 5
   for {set i 0} {$i < $tries} {incr i} {
-    send -i ${sid} "echo ?  $i  ?\n"
+    send -i ${sid} "echo a  $i  z\n"
     expect {
       -i ${sid}
-      -re "\\? $i \\?\[\r\n\]*${promptre}" { break }
+      -re "a $i z\[\r\n\]*${promptre}" { break }
       -re ".*\[\r\n\]" { exp_continue -continue_timer }
       timeout { }
     }
