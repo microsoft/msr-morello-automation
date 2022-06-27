@@ -38,9 +38,13 @@ export async function awaitOneForever(recv : ServiceBusReceiver)
   const msgs = await recv.receiveMessages(1,
     { /*
        * We seemingly can't say to wait forever, so just wait a very long while
-       * before polling again.  (XXX, 20220120)
+       * before polling again.
+       *
+       * XXX 20220622 Apparently 24 hours is too long and something gives up on
+       * our AMQP connection.  Try lowering this to one hour and keeping an eye
+       * on the connections.
        */
-      maxWaitTimeInMs: 24 * 60 * 60 * 1000
+      maxWaitTimeInMs: 60 * 60 * 1000
     });
 
    if (!msgs.length) {
