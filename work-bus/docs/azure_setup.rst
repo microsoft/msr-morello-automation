@@ -364,14 +364,14 @@ Specifically, it will require...
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Sender" `
      -Scope $wqc.Id -ObjectId $exsp.Id
 
-Optionally, we may grant this service principal access to the
+Optionally, we may grant this service principal
 
-* github reflector's debug queue::
+* read adccess to the github reflector's debug queue::
 
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Receiver" `
      -Scope $wqghd.Id -ObjectId $exsp.Id
 
-* cosmos database tables::
+* read access cosmos database tables::
 
     New-AzCosmosDBSqlRoleAssignment -ResourceGroupName $resgrp.ResourceGroupName `
       -AccountName $cdbacc.Name -PrincipalId $exsp.Id `
@@ -382,3 +382,9 @@ Optionally, we may grant this service principal access to the
       -AccountName $cdbacc.Name -PrincipalId $exsp.Id `
       -RoleDefinitionName "Cosmos DB Built-in Data Reader" `
       -Scope "/dbs/$(${ghacldb}.Name)/colls/$(${ghaclrepo}.Name)"
+
+* write access to the job submission queue.  This, in particular, allows us
+  to use the ``shutdown`` client utility herein::
+
+   New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Sender" `
+     -Scope $wqq.Id -ObjectId $exsp.Id
