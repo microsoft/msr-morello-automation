@@ -53,29 +53,90 @@ public one.  In this scenario, you can use something like ::
 
 This, too, spits out a key ID.
 
-Creating Certificates Using openssl
-###################################
+Listing Keys And PKCS#11 URLs
+#############################
 
-Tell OpenSSL to use the TPM2 PKCS11 provider with a config file that looks like
-:download:`this one <openssl-pkcs11-tpm.conf>`.  (The ``req`` section therein
-allows us to specify certificate subjects on the command line without fuss.)
-You can set the ``OPENSSL_CONF`` environment variable to point at this file
-rather than replacing the global configuration.
+This is a bit of a mess; while you'd think that either ``pkcs11-tool`` or
+something within ``openssl`` could be useful here, the simplest thing is to use
+``p11tool`` from GNUTLS.  You'll need to tell ``p11tool`` to load the right
+module, which seems to be possible only by modifying files (sigh), thanks to
+p11-kit.  Anyway, create ``/etc/pkcs11/modules/tpm2.module`` with the single
+line ::
 
-A self-signed certificate for this key can be created with something like the
-following.  You'll need the user PID for the token from above.  ::
+    module: /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
 
-    openssl req -engine pkcs11 -keyform engine -new -nodes -x509 -sha256 \
-      -key 1:${CKA_ID} -days 3650 -subj "/CN=..."
+And then run ``p11tool --list-tokens``.  You should see a URL with the right
+``label=$TOKEN_LABEL`` conjunct.  If you run ``p11tool --list-all
+"pkcs11:label=$TOKEN_LABEL"``, you should see the public keys available under
+this token, even if you have set a user PIN.  If you have not set a user PIN,
+the private key objects will also be shown.  If you have set a user PIN, you
+can see the private key objects by adding adding ``--login`` to request that
+``p11tool`` authenticate to the token first.
+
+In general it suffices to use the ``token=$TOKEN_LABEL`` and
+``object=$KEY_LABEL`` conjuncts in simple setups like this one; there's no need
+for the rest of the PKCS#11 URL.
+
+Creating Certificates
+#####################
+
+OpenSSL
+=======
+
+This is no longer straightforward with OpenSSL 3; it seems like the PKCS#11
+engine now available in OpenSSL is severely restricted relative to the 1.1
+version.  There does not seem to be a replacement PKCS#11 OpenSSL 3 provider.
+(At least enough functionality remains that OpenSSH and nginx, below, can avail
+themselves of PKCS#11 tokens, but key management operations seem gone.) It is
+possible that the 1.8 release of https://github.com/tpm2-software/tpm2-pkcs11,
+which brings a new ``tpm2_ptool export`` command, provides a way forward, but,
+as of this writing, no meaningful documentation or migration guide is easily
+found.
+
+.. Tell OpenSSL to use the TPM2 PKCS11 provider with a config file that looks like
+.. :download:`this one <openssl-pkcs11-tpm.conf>`.  (The ``req`` section therein
+.. allows us to specify certificate subjects on the command line without fuss.)
+.. You can set the ``OPENSSL_CONF`` environment variable to point at this file
+.. rather than replacing the global configuration.
+..
+.. A self-signed certificate for this key can be created with something like the
+.. following.  You'll need the user PID for the token from above.  ::
+..
+..     openssl req -engine pkcs11 -keyform engine -new -nodes -x509 -sha256 \
+..       -key 1:${CKA_ID} -days 3650 -subj "/CN=..."
+..
+
+.. _misc-docs/tpm-hsm/create/gnutls:
+
+GNUTLS
+======
+
+Having told p11-kit how to find the tpm2 PKCS#11 module as per `above
+<Listing Keys And PKCS#11 URLs>`_, you can run::
+
+  GNUTLS_PIN=abracadabra certtool --generate-self-signed \
+    --load-privkey "pkcs11:token=$TOKEN_LABEL;object=$KEY_LABEL'
 
 OpenSSH Public Key Format
 =========================
 
 You can also read out the public keys in OpenSSH format with ::
 
-   ssh-keygen -D /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
+  ssh-keygen -D /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
 
 The comment will contain the ``--key-label``.
+
+OpenSSL Path-based Certificate Stores
+=====================================
+
+The OpenSSL short hash of the certificate, as used by, for example, file-based
+certificate root stores (such as ``/etc/ssl/certs``) can be computed using::
+
+  openssl x509 -hash -noout -in /etc/nginx/tpm-http.crt
+
+Despite being "proprietary" to OpenSSL, this can be more convenient than using
+a certificate bundle file as we can just place a file in a directory rather
+than needing to append to a file.
 
 nginx
 #####
@@ -88,12 +149,14 @@ configuration language.
   mode ``0700``.
 
 - Then, follow the instructions for `Creating Keys Using tpm2_ptool`_ above,
-  running these commands **as the** ``www-data`` **user** and using ``http``
-  for the ``$TOKEN_LABEL``.  The TPM PKCS11 glue files will end up in
-  ``/var/www/.tpm2_pkcs11``.
+  running these commands **as the** ``www-data`` **user**, using ``http``
+  for the ``$TOKEN_LABEL``, and ``httpkey`` for the key label.  The TPM PKCS11
+  glue files will end up in ``/var/www/.tpm2_pkcs11``.
 
-- Still as ``www-data``, run the command in `Creating Certificates Using
-  openssl`_ above.  Save the output to ``/etc/nginx/tpm-http.crt``.
+- Still as ``www-data``, run :ref:`the command above
+  <misc-docs/tpm-hsm/create/gnutls>` to generate a self-signed certificate.
+  Save the output to ``/etc/nginx/tpm-http.crt`` and export it to client
+  systems (see `OpenSSL Path-based Certificate Stores`_, for example).
 
 - Create ``/etc/systemd/system/nginx.service.d/99-opensslconf.conf`` with ::
 
@@ -119,26 +182,13 @@ configuration language.
     MODULE_PATH = /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
     PIN=abracadabra
 
-- Find the ID of the key to use.  This is a bit of a mess; while you'd think
-  that either ``pkcs11-tool`` or something within ``openssl`` could be useful
-  here, the simplest thing, ironically, is to use ``p11tool`` from GNUTLS
-  (sigh).  You'll need to tell ``p11tool`` to load the right module, which
-  seems to be possible only by modifying files (sigh) thanks to p11-kit.
-  Anyway, create ``/etc/pkcs11/modules/tpm2.module`` with the single line ::
-
-    module: /usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1
-
-  And then run ``p11tool --list-tokens`` and grab the URI with the right Label
-  (``http``, used as ``$TOKEN_LABEL`` from above).
+- Find the ID of the key to use.
 
 - Use these lines in a site configuration to use the TPM2 key
   ::
 
     ssl_certificate "/etc/nginx/tpm-http.crt";
-    ssl_certificate_key "engine:pkcs11:pkcs11:model=IoT%20Soft;manufacturer=MSFT;serial=0000000000000000;token=http";
-
-  The ``http`` in the ``pkcs11`` URI is the ``$TOKEN_LABEL``, the rest is
-  hard-coded noise for the vTPM exposed by HyperV.  YMMV.
+    ssl_certificate_key "engine:pkcs11:pkcs11:token=http;object=httpkey";
 
 .. _misc-docs/tpm-hsm/ssh:
 
@@ -154,8 +204,9 @@ Follow the instructions for `Creating Keys Using tpm2_ptool`_ above, running
 these commands as the user who will be running SSH, and using ``ssh`` for the
 ``$TOKEN_LABEL``, and leaving ``userpin`` *empty* (that is, ``--userpin ''``)
 unless you want ``ssh`` to prompt for a PIN or use its ``SSH_ASKPASS``
-mechanism.  The TPM PKCS11 glue files will end up in ``$HOME/.tpm2_pkcs11/``.
+mechanism.  The TPM PKCS#11 glue files will end up in ``$HOME/.tpm2_pkcs11/``.
 
 While it suffices to pass something like ``-I
-/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so`` to ``ssh``, you will probably be
-better off using a ssh configuration file.
+/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so.1`` to ``ssh``, you will probably
+be better off using a ssh configuration file; the option you want is
+``PKCS11Provider``.
