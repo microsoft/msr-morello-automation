@@ -6,7 +6,7 @@ import * as fs from "fs"
 
 import * as lib from "@msr-morello-work-bus/lib"
 
-import { DispatchResult } from "./types"
+import { DispatchResult, DispatchJobResult } from "./types"
 
 export function prepareYargs(yargs : Argv) {
   return yargs.option("github_prepare", {
@@ -134,14 +134,14 @@ export async function prepare(
     // Leave settings.json here for cleanup, below
   }
 
-  const runp = new Promise<number>( (resolve) => {
+  const runp = new Promise<DispatchJobResult>( (resolve) => {
     const run = spawn(argv.remotecmd as string, [argv.github_run as string],
       { shell: false
       , stdio: "inherit"
       });
     run.on("exit", (v:number) => {
       console.log("work-bus executor github: runner task exited", v);
-      resolve(v)
+      resolve({ result: v == 0 ? "ok" : "fail" })
     });
   });
 

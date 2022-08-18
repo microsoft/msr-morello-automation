@@ -3,7 +3,7 @@ import type { Arguments, Argv } from "yargs"
 
 import * as lib from "@msr-morello-work-bus/lib"
 
-import { DispatchResult } from "./types"
+import { DispatchResult, DispatchJobResultShutdown } from "./types"
 
 async function act(
  argv : Arguments,
@@ -21,7 +21,7 @@ async function act(
     });
 
   await sbSendQ.close();
-  return 42;
+  return <DispatchJobResultShutdown> { result: "shutdown" };
 }
 
 export async function prepare(

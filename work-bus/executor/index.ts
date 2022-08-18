@@ -8,6 +8,7 @@ import * as yargs from "yargs"
 
 import * as lib from "@msr-morello-work-bus/lib"
 import * as dispatch from "./dispatch"
+import * as t from "./types"
 
 declare global {
   namespace NodeJS {
@@ -125,17 +126,25 @@ function makeCompletionPromise(
 
       console.error("work-bus executor: got completion message", cmsg.body);
       await sbRecvC.completeMessage(cmsg);
-      resolve(0);
+      resolve(<t.DispatchJobResultOK> {result: "ok"});
     } catch(e) {
       /*
        * This can happen if we're on the way out and get kicked out of
        * the await above; it's probably harmless.
        */
-      resolve(1);
+      resolve(<t.DispatchJobResultFail> {result: "fail"});
     } finally {
       await sbRecvC.close();
     }
   });
+}
+
+function jobResultToExitCode(r: t.DispatchJobResult) {
+  switch(r.result) {
+    case "ok": return 0;
+    case "fail": return 1;
+    case "shutdown": return 42;
+  }
 }
 
 (async () => {
@@ -149,11 +158,12 @@ function makeCompletionPromise(
 
     if (pCompMsg !== undefined) {
       console.error("work-bus executor: racing job against completion...");
-      const v = await Promise.race([pCompMsg, dispRes.promise]);
+      const v = <t.DispatchJobResult>
+        await Promise.race([pCompMsg, dispRes.promise]);
 
       console.log("work-bus executor: race finished:",
         [pCompMsg, dispRes.promise]);
-      process.exitCode = <number> v;
+      process.exitCode = jobResultToExitCode(v);
 
       /*
        * Linger until we get the completion message so that it doesn't remain in
@@ -167,7 +177,7 @@ function makeCompletionPromise(
       ]);
     } else {
       console.error("work-bus executor: job has no completion message");
-      process.exitCode = await dispRes.promise;
+      process.exitCode = jobResultToExitCode(await dispRes.promise);
     }
 
     if (dispRes.cleanup !== undefined) {
