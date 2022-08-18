@@ -158,6 +158,16 @@ proc mfs_run { sid cmd } {
   wait_for_mfs_shell ${sid}
 }
 
+# Bring up the network using bootloader-provided information.  Doing this
+# early gives us a decent amount of time for media negotiation to happen in
+# the background.  See also the use of `netwait` below.
+#
+# The system will DHCP again when it boots rather than use this information;
+# we'll write our `ipaddr` file on *that* acquisition, in case it matters.
+mfs_run ${sap} \
+ "ifconfig re0 \$(kenv boot.netif.ip) netmask \$(kenv boot.netif.netmask) up"
+mfs_run ${sap} "route add default \$(kenv boot.netif.gateway)"
+
 # Unset kenv vars set above for MFS
 mfs_run ${sap} "kenv -u cheribuild.skip_entropy"
 mfs_run ${sap} "kenv -u cheribuild.skip_sshd"
@@ -203,7 +213,7 @@ if {0 < [string length "${cmdopts(ssh-ecdsa)}" ]} {
   wait_for_mfs_shell ${sap}
 }
 
-# Set the host name (before DHCP)
+# Set the host name
 mfs_run ${sap} "hostname ${cmdopts(board)}"
 
 # Set a hostuuid and hostid.  The kernel will use the hostuuid as the client
@@ -212,15 +222,17 @@ mfs_run ${sap} "hostname ${cmdopts(board)}"
 mfs_run ${sap} "sysctl kern.hostuuid=\$(uuidgen)"
 mfs_run ${sap} "kenv smbios.system.uuid=\$(sysctl -n kern.hostuuid)"
 
-# Bring up the network using bootloader-provided information.
-# The system will DHCP again when it boots rather than use this information;
-# we'll write our `ipaddr` file on *that* acquisition, in case it matters.
-mfs_run ${sap} \
- "ifconfig re0 \$(kenv boot.netif.ip) netmask \$(kenv boot.netif.netmask) up"
-mfs_run ${sap} "route add default \$(kenv boot.netif.gateway)"
+## TODO: Desirable, but /etc/rc.d/netwait is not yet in MFS roots.
+## Wait for the network so we don't hit retransmission timeouts in mounting NFS
+#mfs_run ${sap} "echo 'netwait_if=\"re0\"' >> /etc/rc.conf"
+#mfs_run ${sap} "/etc/rc.d/netwait onestart"
 
 # Pivot to NFS root
 mfs_run ${sap} "kenv vfs.root.mountfrom=nfs:${cmdopts(nfs-root)}"
+
+# send_user "===> Sleeping for a few if you want to stop me\n"
+# sleep 5
+
 typeslow ${sap} "reboot -r\n"
 
 # Wait for DHCP and, if asked, write the bound address to a file.
