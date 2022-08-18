@@ -51,7 +51,7 @@ async function bootBoard(boot : string, label2: string): Promise<number> {
 
   const runboot = spawn(boot, [label2],
     { shell: false
-    , timeout: 30000
+    , timeout: 600000 // 10 minutes; script also has its own set of timeouts
     , stdio: ["ignore", "inherit", "inherit"]
     });
   return await new Promise( (resolve) => runboot.on("exit", resolve) )
