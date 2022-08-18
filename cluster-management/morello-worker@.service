@@ -10,10 +10,17 @@ WantedBy=multi-user.target
 
 [Service]
 Type=exec
-Restart=always
-RestartPreventExitStatus=42
 User=morello-auto
 Group=morello-auto
+
+# The executor is one-shot; restart it by default.
+Restart=always
+
+# The executor exits 42 when it receives an explicit shutdown request.  Those
+# should stop it from reentering the pool (RestartPreventExitStatus) and should
+# not count as failure (SuccessExitStatus).
+RestartPreventExitStatus=42
+SuccessExitStatus=42
 
 RuntimeDirectory=morello/%I
 Environment=MORELLO_HOSTNAME=%I
