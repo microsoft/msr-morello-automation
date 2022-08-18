@@ -20,7 +20,7 @@ export function appYargs(yargs: Argv) {
 export function app(argv: Arguments) {
   return new App({
     appId: argv.github_appid as number,
-    privateKey: argv.github_key as string,
+    privateKey: argv.github_key as any,
 
     /*
      * Override the constructor used for subordinate octokit instances;
