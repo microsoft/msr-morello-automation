@@ -46,15 +46,15 @@ async function makeSettings(
   return await new Promise( (resolve) => runprep.on("exit", resolve) )
 }
 
-async function bootBoard(boot : string, label2: string): Promise<number> {
-  console.error("work-bus executor github: booting board")
+async function prepareBoard(script : string, label2: string): Promise<number> {
+  console.error("work-bus executor github: preparing board")
 
-  const runboot = spawn(boot, [label2],
+  const runprep = spawn(script, [label2],
     { shell: false
     , timeout: 600000 // 10 minutes; script also has its own set of timeouts
     , stdio: ["ignore", "inherit", "inherit"]
     });
-  return await new Promise( (resolve) => runboot.on("exit", resolve) )
+  return await new Promise( (resolve) => runprep.on("exit", resolve) )
 }
 
 export async function prepare(
@@ -66,12 +66,12 @@ export async function prepare(
   console.error("work-bus executor github: event for", msg.owner, msg.repo)
 
   // Boot the board
-  const bootBoardP = bootBoard(
+  const prepareBoardP = prepareBoard(
     argv.board_prepare as string,
     msg.labels[2])
 
-  if (await bootBoardP != 0) {
-    throw new Error("Failed to boot board");
+  if (await prepareBoardP != 0) {
+    throw new Error("Failed to prepare board");
   }
 
   // Get a registration token from github
@@ -110,9 +110,9 @@ export async function prepare(
    *
      // Wait for both of those to complete, bailing if either fails.
      {
-       const vs = await Promise.all([registerRunnerP, bootBoardP]);
+       const vs = await Promise.all([registerRunnerP, prepareBoardP]);
        if (vs[0] != 0) { throw new Error("Failed to register runner"); }
-       if (vs[1] != 0) { throw new Error("Failed to boot board"); }
+       if (vs[1] != 0) { throw new Error("Failed to prepare board"); }
      }
    */
 
