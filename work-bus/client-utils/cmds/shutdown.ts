@@ -27,10 +27,12 @@ exports.builder = function (yargs: Argv) {
       });
 }
 exports.handler = async function (argv: Arguments) {
+  console.error("[+] Dialing service bus...")
   const sbClient = lib.AzureServiceBusUtils.clientFromYargs(argv);
 
   const id = uuidv4();
 
+  console.error("[+] Sending service bus message...")
   const sbSendQ = sbClient.createSender(argv.busqueue as string);
 
   await sbSendQ.sendMessages(
