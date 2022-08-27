@@ -59,51 +59,63 @@ function withShutdown<T>(act: Promise<T>,
   });
 }
 
-async function waitAndPrepare(sb: ServiceBusClient, argv: yargs.Arguments) {
+async function waitForWork(sb: ServiceBusClient, argv: yargs.Arguments) {
   /* Subscribe to a queue or a topic subscription, as directed */
   const sbQN = argv.busqueue as string;
   const sbQ = argv.busqueuesub != undefined
     ? sb.createReceiver(sbQN, argv.busqueuesub as string)
     : sb.createReceiver(sbQN)
 
-  console.log(sbQN, argv.busqueuesub)
+  console.error("work-bus executor: waiting for job to become available...");
+
+  const qmsg = await withShutdown(
+    lib.AzureServiceBusUtils.awaitOneForever(sbQ),
+    360000 /* in six mintues, if we haven't gotten a job... */,
+    argv.board_shutdown as string | undefined /* ... shut down the board */);
+
+  return { sbQ, qmsg };
+}
+
+async function waitAndPrepare(sb: ServiceBusClient, argv: yargs.Arguments) {
+  const { sbQ, qmsg } = await waitForWork(sb, argv);
+  const mbody = <lib.QueueDataTypes.EnqueuedJobEvent> qmsg.body;
+
+  console.error("work-bus executor: dispatching prepare...", mbody);
+
+  /*
+   * Every three minutes while we're still waiting, prevent the work request
+   * from timing out and going to another worker.
+   */
+  const keepalive = lib.TimeUtils.periodically(180000, () => {
+    (async () => {
+      console.error("work-bus executor renewing message lock");
+      await sbQ.renewMessageLock(qmsg);
+    })();
+  });
+
+  /*
+   * When we've successfully finished the job, mark it as done on the message
+   * queue, stop the keepalive periodic ticker, and shut down our service bus
+   * receiver.
+   */
+  const onComplete = async () => {
+    await sbQ.completeMessage(qmsg);
+    keepalive.stop();
+    await sbQ.close();
+  };
+
+  const onAbandon = async () => {
+    keepalive.stop();
+    await sbQ.abandonMessage(qmsg);
+    await sbQ.close();
+  };
 
   try {
-    console.error("work-bus executor: waiting for job to become available...");
-
-    const qmsg = await withShutdown(
-     lib.AzureServiceBusUtils.awaitOneForever(sbQ),
-     360000 /* in six mintues, if we haven't gotten a job... */,
-     argv.board_shutdown as string | undefined /* ... shut down the board */);
-
-    const mbody = <lib.QueueDataTypes.EnqueuedJobEvent> qmsg.body;
-
-    console.error("work-bus executor: dispatching prepare...", mbody);
-
-    /*
-     * Every three minutes while we're still waiting, prevent the work request
-     * from timing out and going to another worker.
-     */
-    const keepalive = lib.TimeUtils.periodically(180000, () => {
-      (async () => {
-        console.error("work-bus executor still waiting on prepare");
-        await sbQ.renewMessageLock(qmsg);
-      })();
-    });
-
     const dispRes = await dispatch.dispatchPrepare(argv, sb, mbody);
-
-    /*
-     * Now that we've prepared, acknowledge the work request.  If we don't
-     * make it here, the service bus will retry delivery to another listener
-     * or will eventually time out.
-     */
-    keepalive.stop();
-    await sbQ.completeMessage(qmsg);
-
-    return dispRes
-  } finally {
-    await sbQ.close()
+    return { dispRes, onComplete, onAbandon }
+  } catch(e) {
+    await onAbandon();
+    throw e;
   }
 }
 
@@ -151,8 +163,10 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
   const argv = await yargparse.parseAsync(process.argv.slice(2))
   const sbClient = lib.AzureServiceBusUtils.clientFromYargs(argv);
 
+  const { dispRes, onComplete: dispComplete, onAbandon: dispAbandon } =
+    await waitAndPrepare(sbClient, argv);
+
   try {
-    const dispRes = await waitAndPrepare(sbClient, argv);
     const pCompMsg = makeCompletionPromise(
       sbClient, argv, dispRes.completionFrom);
 
@@ -169,8 +183,9 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
        * Linger until we get the completion message so that it doesn't remain in
        * the service bus.  It's possible that we already have it, if it won the
        * race, above.  On the other hand, don't wait forever for a message that's
-       * not coming, if something has gone wrong; just bail.
+       * not coming; if something has gone wrong, just bail.
        */
+      console.error("work-bus executor: awaiting completion acknowledgement");
       await Promise.race([
         pCompMsg,
         new Promise<void>((r) => { setTimeout(r, 60000) })
@@ -180,9 +195,15 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
       process.exitCode = jobResultToExitCode(await dispRes.promise);
     }
 
+    /* Remove the work from the job queue now that it's done */
+    await dispComplete();
+
     if (dispRes.cleanup !== undefined) {
       await dispRes.cleanup();
     }
+  } catch(e) {
+    await dispAbandon();
+    throw e;
   } finally {
     await sbClient.close()
   }
