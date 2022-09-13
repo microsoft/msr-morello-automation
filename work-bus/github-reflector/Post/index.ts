@@ -176,6 +176,20 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
          * others are freeform.  See docs/github-reflector#labels
          */
         labels: labels
+
+        /*
+         * None of the identifiers above make it easy to figure out which bit
+         * of the github UI to look at.  Carry some extra information from
+         * GitHub over the bus for debugging purposes.  We at least want the
+         * workflow_job's {run_id, run_url, url, html_url, check_run_url}
+         * fields and maybe started_at as well, but at that point we might as
+         * well just include the whole thing, even if it's a little redundant
+         * with our extracted fields above.
+         */
+      , debug:
+        { workflow_job: payload.workflow_job
+        , sender_login: payload.sender.login
+        }
       };
 
     if (payload.action == "completed") {

@@ -5,6 +5,7 @@ export interface GitHubEventCommon {
   owner: okw.User["login"];
   repo: okw.Repository["name"];
   repo_html_url: okw.Repository["html_url"]
+  debug: any | undefined;
 }
 
 /* From reflector, for debug only */
@@ -12,7 +13,6 @@ export interface GitHubStarEvent extends GitHubEventCommon {
   type: "github-star";
   action: okw.StarEvent["action"];
   starred_at: okw.StarEvent["starred_at"];
-  debug: any;
 }
 
 /* From reflector to executor, on work queue */
