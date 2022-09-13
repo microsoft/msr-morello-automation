@@ -3,11 +3,11 @@
   "version": "",
   "description": "",
   "dependencies": {
-    "@azure/cosmos": "^3.15.0",
-    "@azure/functions": "^1.0.1-beta1",
-    "@azure/identity": "^2.0.4",
-    "@azure/service-bus": "^7.4.0",
-    "@octokit/webhooks": "^9.22.0",
-    "@types/node": "^17.0.9"
+    "@azure/cosmos": "^3.17.1",
+    "@azure/functions": "^1.2.3",
+    "@azure/identity": "^2.1.0",
+    "@azure/service-bus": "^7.7.1",
+    "@octokit/webhooks": "^9.26.0",
+    "@types/node": "^17.0.45"
   }
 }

@@ -5,13 +5,13 @@
     "./*": "./dist/*.js"
   },
   "devDependencies": {
-    "@types/yargs": "^17.0.8"
+    "@types/yargs": "^17.0.12"
   },
   "dependencies": {
-    "@azure/identity": "^2.0.4",
-    "@azure/service-bus": "^7.4.0",
+    "@azure/identity": "^2.1.0",
+    "@azure/service-bus": "^7.7.1",
     "@octokit/webhooks-types": "^5.3.0",
-    "octokit": "^1.7.1",
-    "yargs": "^17.3.1"
+    "octokit": "^1.8.1",
+    "yargs": "^17.5.1"
   }
 }

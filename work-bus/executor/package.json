@@ -8,13 +8,13 @@
   "author": "Microsoft Corporation",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^17.0.10",
-    "@types/yargs": "^17.0.8"
+    "@types/node": "^17.0.45",
+    "@types/yargs": "^17.0.12"
   },
   "dependencies": {
-    "@azure/cosmos": "^3.15.0",
-    "@azure/service-bus": "^7.4.0",
-    "octokit": "^1.7.1",
-    "yargs": "^17.3.1"
+    "@azure/cosmos": "^3.17.1",
+    "@azure/service-bus": "^7.7.1",
+    "octokit": "^1.8.1",
+    "yargs": "^17.5.1"
   }
 }
