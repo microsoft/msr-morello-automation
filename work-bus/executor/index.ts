@@ -169,15 +169,15 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
   try {
     const pCompMsg = makeCompletionPromise(
       sbClient, argv, dispRes.completionFrom);
+    var djr : t.DispatchJobResult;
 
     if (pCompMsg !== undefined) {
       console.error("work-bus executor: racing job against completion...");
-      const v = <t.DispatchJobResult>
+      djr = <t.DispatchJobResult>
         await Promise.race([pCompMsg, dispRes.promise]);
 
       console.log("work-bus executor: race finished:",
         [pCompMsg, dispRes.promise]);
-      process.exitCode = jobResultToExitCode(v);
 
       /*
        * Linger until we get the completion message so that it doesn't remain in
@@ -192,11 +192,18 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
       ]);
     } else {
       console.error("work-bus executor: job has no completion message");
-      process.exitCode = jobResultToExitCode(await dispRes.promise);
+      djr = await dispRes.promise;
     }
 
-    /* Remove the work from the job queue now that it's done */
-    await dispComplete();
+    if (djr.result != "fail") {
+      /*
+       * Remove the work from the job queue now that it's successfully
+       * executed.  Failures we'll let go through the system again, at least
+       * up to retransmission limits.
+       */
+      await dispComplete();
+    }
+    process.exitCode = jobResultToExitCode(djr);
 
     if (dispRes.cleanup !== undefined) {
       await dispRes.cleanup();
