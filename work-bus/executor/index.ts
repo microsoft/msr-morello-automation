@@ -195,7 +195,13 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
       djr = await dispRes.promise;
     }
 
-    if (djr.result != "fail") {
+    if (djr.result == "fail") {
+      /*
+       * Abandon this work request now, rather than letting it timeout in the
+       * work queue, so that another board picks it up, we hope.
+       */
+      await dispAbandon();
+    } else {
       /*
        * Remove the work from the job queue now that it's successfully
        * executed.  Failures we'll let go through the system again, at least
