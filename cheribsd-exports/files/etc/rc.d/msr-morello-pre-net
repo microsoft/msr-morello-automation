@@ -22,3 +22,6 @@ mkdir /mnt/nullfs-usr-local
 mount_nullfs /mnt/nullfs-usr-local /usr/local
 mkdir /mnt/nullfs-usr-local64
 mount_nullfs /mnt/nullfs-usr-local64 /usr/local64
+
+# Also while here, add ourselves to /etc/hosts
+echo 127.0.1.1 $(hostname -s) >> /etc/hosts
