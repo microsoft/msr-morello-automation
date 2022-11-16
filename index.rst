@@ -30,6 +30,13 @@ MSR Cambridge Morello Cluster
    misc-docs/uefi-tls
    misc-docs/links
 
+.. XXX DNM
+.. toctree::
+   :maxdepth: 1
+   :caption: Deployment-Specific Documentation:
+
+   local/docs/index
+
 .. toctree::
    :maxdepth: 1
    :caption: Meta:

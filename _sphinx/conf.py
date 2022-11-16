@@ -1,13 +1,15 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+from sphinx.errors import NoUri
+
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
@@ -32,6 +34,7 @@ nitpicky=True
 # ones.
 extensions = [
   'sphinx.ext.extlinks',
+  'sphinx.ext.ifconfig',
   'sphinx.ext.todo',
   'myst_parser'
 ]
@@ -50,6 +53,29 @@ exclude_patterns = [
   'old/**',
   'local/**'
 ]
+
+# XXX
+# # The 'ifconfig' extension does not act early enough in processing to prevent
+# # the cross-reference machinery from seeing the reference(s) to
+# # :doc:`local/docs/index`, so while the text won't be rendered, it will still
+# # emit a warning.  Yuck.  We can at least quiet the warning.
+# def local_index_missing(app, env, node, contnode):
+#     print("===> NWF", node)
+#     if node['reftype'] == "doc" and node['reftarget'] == "local/docs/index":
+#         raise NoUri
+# 
+# def local_index_source_read(app, docname, source):
+#     if docname == "index":
+#         print("===> NWF", source)
+# 
+# def setup(app):
+#     ld = os.path.exists('local/docs/index.rst')
+#     app.add_config_value('has_local_index', ld, 'env')
+#     if not ld: app.connect("missing-reference", local_index_missing)
+# 
+#     if ld:
+#         app.connect("source-read", local_index_source_read)
+#         pass
 
 # -- Options for extlinks ----------------------------------------------------
 
