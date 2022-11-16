@@ -51,7 +51,6 @@ exclude_patterns = [
   '**/node_modules',
   '**/dist',
   'old/**',
-  'local/**'
 ]
 
 # XXX
