@@ -15,10 +15,11 @@ conf/default uid=0 gid=0 mode=755 type=dir
 conf/default/etc uid=0 gid=0 mode=755 type=dir
 conf/default/etc/fstab contents=conf/default/etc/fstab uid=0 gid=0 mode=444 type=file
 # /etc already exists
+etc/diskless contents=etc/diskless uid=0 gid=0 mode=444 type=file
 etc/rc.conf contents=etc/rc.conf uid=0 gid=0 mode=444 type=file
 # /etc/rc.d already exists
 etc/rc.d/msr-morello-pre-net contents=etc/rc.d/msr-morello-pre-net uid=0 gid=0 mode=755 type=file
-etc/diskless contents=etc/diskless uid=0 gid=0 mode=444 type=file
+etc/sysctl.conf contents=etc/sysctl.conf uid=0 gid=0 mode=755 type=file
 opt uid=0 gid=0 mode=755 type=dir
 opt/bin uid=0 gid=0 mode=755 type=dir
 opt/bin/msr-morello-init contents=opt/bin/msr-morello-init uid=0 gid=0 mode=755 type=file
