@@ -25,6 +25,10 @@ export GODEBUG="asyncpreemptoff=1"
 # latter, we can time out our runner by sending it a single SIGINT: either it
 # will have picked up a job and do nothing, or it won't have picked up a job
 # yet and will stop listening and de-register itself.
-(sleep 300; kill -INT $$) &
+(sleep 300; kill -INT -$$) &
 
-exec /opt/bin/github-act-runner run
+/opt/bin/github-act-runner run
+E=$?
+
+kill %1
+exit $E
