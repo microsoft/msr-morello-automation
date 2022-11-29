@@ -15,6 +15,7 @@ conf/default uid=0 gid=0 mode=755 type=dir
 conf/default/etc uid=0 gid=0 mode=755 type=dir
 conf/default/etc/fstab contents=conf/default/etc/fstab uid=0 gid=0 mode=444 type=file
 # /etc already exists
+etc/dhclient-enter-hooks contents=etc/dhclient-enter-hooks uid=0 gid=0 mode=555 type=file
 etc/diskless contents=etc/diskless uid=0 gid=0 mode=444 type=file
 etc/rc.conf contents=etc/rc.conf uid=0 gid=0 mode=444 type=file
 # /etc/rc.d already exists

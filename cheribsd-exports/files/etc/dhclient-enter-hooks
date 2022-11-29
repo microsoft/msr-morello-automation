@@ -1,0 +1,16 @@
+# dhclient will EXPIRE leases before attempting to renew them if there is a
+# sufficiently large jump in wall time (one that steps over the rebinding
+# window entirely).  While that makes some amount of sense (though it'd be
+# nicer to have a state machine that prohibited a direct transition) and is in
+# general probably a very rare thing, it happens not infrequently on our
+# Morello boards, whose RTCs do not always keep time and sometimes get reset
+# back to 2000.  The resulting multi-decade NTP timestep means that the next
+# time dhclient wakes up, it tears down the network before trying again.  Even
+# that might be acceptable, in general, except that we're NFS-rooted, and so
+# losing the network is an irrecoverable catastrophe.  So, just don't do
+# anything on EXPIRE events; a little antisocial in the worst case, but nothing
+# our DHCP server can't deal with.
+
+if [ "$reason" = "EXPIRE" ]; then
+  exit 0
+fi
