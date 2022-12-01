@@ -64,22 +64,38 @@ async function aclCheck(db: CosmosDB, owner: string, repo: string, label: string
   return false;
 }
 
+const selfcred = new DefaultAzureCredential();
+
+/*
+ * XXX 202201 Because we want to do something more than post text to a queue,
+ * we can't avail ourselves of the serviceBus output bindings for everything.
+ * Rather than construct two clients, one for the bindings and one for us,
+ * just do it all by hand.
+ *
+ * The "__fullyQualifiedNamespace" bit of the config variable name comes from
+ * the binding logic, though I cannot find where that actually happens.
+ */
+const sbClient = new ServiceBusClient(
+  process.env["SBCONN__fullyQualifiedNamespace"], selfcred);
+const sbSendDebug = sbClient.createSender("github-reflector-debug");
+const sbSendWQ = sbClient.createSender("work-queue");
+const sbSendWC = sbClient.createSender("work-complete");
+
+const cosmosClient = new CosmosClient(
+      { aadCredentials: selfcred
+      , endpoint: process.env["ACL_COSMOS"] });
+const cosmosGHWHDB = cosmosClient.database("GitHubWebHookDB");
+
+/*
+ * XXX is there a shutdown hook where we should run these?
+
+  await sbSendDebug.close();
+  await sbClient.close();
+  await cosmosClient.dispose();
+ */
+
 const httpTrigger: AzureFunction = async function (context: Context, req: HttpRequest): Promise<void> {
   const webhooks = new Webhooks({ secret: process.env["GITHUB_HMAC_KEY"] });
-  const selfcred = new DefaultAzureCredential();
-
-  /*
-   * XXX 202201 Because we want to do something more than post text to a queue,
-   * we can't avail ourselves of the serviceBus output bindings for everything.
-   * Rather than construct two clients, one for the bindings and one for us,
-   * just do it all by hand.
-   *
-   * The "__fullyQualifiedNamespace" bit of the config variable name comes from
-   * the binding logic, though I cannot find where that actually happens.
-   */
-  const sbClient = new ServiceBusClient(
-    process.env["SBCONN__fullyQualifiedNamespace"], selfcred);
-  const sbSendDebug = sbClient.createSender("github-reflector-debug");
 
   context.res = { };
 
@@ -122,22 +138,15 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
       return;
     }
 
-    const cosmos = new CosmosClient(
-      { aadCredentials: selfcred
-      , endpoint: process.env["ACL_COSMOS"] });
 
-    try {
-      const db = cosmos.database("GitHubWebHookDB");
+    // Require that the source be in the ACL
+    if (!await aclCheck(cosmosGHWHDB,
+                        repo.owner.login, repo.name, labels[1])) {
+      const msg = `${repo.owner.login} ${repo.name} unauth for ${labels[1]}`;
 
-      // Require that the source be in the ACL
-      if (!await aclCheck(db,
-                          repo.owner.login, repo.name, labels[1])) {
-        context.log("Unauthorized; done")
-        context.res = { status: 200, body: "Unauthorized; done" };
-        return;
-      }
-    } finally {
-      await cosmos.dispose();
+      context.log(msg)
+      context.res = { status: 200, body: msg };
+      return;
     }
 
     // Send a very short summary onwards
@@ -206,12 +215,10 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
     switch (payload.action) {
     case "queued":
      {
-      const sbSendQ = sbClient.createSender("work-queue");
-      await sbSendQ.sendMessages(<ServiceBusMessage>
+      await sbSendWQ.sendMessages(<ServiceBusMessage>
         { messageId: `githubQ-${summary.id}`
         , subject: labels[1]
         , body: <lqty.GitHubWorkflowJobQueuedEvent> summary });
-      await sbSendQ.close();
       break;
      }
     case "completed":
@@ -225,13 +232,11 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
          * Use messageId as intended, for message
          * deduplication.
          */
-        const sbSendQ = sbClient.createSender("work-complete");
-        await sbSendQ.sendMessages(<ServiceBusMessage>
+        await sbSendWC.sendMessages(<ServiceBusMessage>
           { sessionId: `github-${summary.runner}`
           , messageId: `github-${summary.runner}-${summary.id}`
           , body: <lqty.GitHubWorkflowJobCompletedEvent> summary
           });
-        await sbSendQ.close();
       } else {
         /*
          * A null runner with completion means that the job has been aborted
@@ -258,32 +263,23 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
   {
     context.log("Got star event action=%s", payload.action);
 
-    const cosmos = new CosmosClient(
-      { aadCredentials: selfcred
-      , endpoint: process.env["ACL_COSMOS"] });
-
     const repo = payload.repository;
-    try {
-      const db = cosmos.database("GitHubWebHookDB");
-      const event : lqty.GitHubStarEvent =
-        { type: "github-star"
-        , action: payload.action
-        , starred_at: payload.starred_at
-        , installation: payload.installation.id
-        , owner: repo.owner.login
-        , repo: repo.name
-        , repo_html_url: repo.html_url
-        , debug:
-            [ await aclCheck(db,
-                repo.owner.login, repo.name, "msr-morello")
-            , await aclCheck(db,
-                repo.owner.login, repo.name, "reflector-debug")
-            ]
-        };
-      await sbSendDebug.sendMessages(<ServiceBusMessage> { body: event })
-    } finally {
-      await cosmos.dispose();
-    }
+    const event : lqty.GitHubStarEvent =
+      { type: "github-star"
+      , action: payload.action
+      , starred_at: payload.starred_at
+      , installation: payload.installation.id
+      , owner: repo.owner.login
+      , repo: repo.name
+      , repo_html_url: repo.html_url
+      , debug:
+          [ await aclCheck(cosmosGHWHDB,
+              repo.owner.login, repo.name, "msr-morello")
+          , await aclCheck(cosmosGHWHDB,
+              repo.owner.login, repo.name, "reflector-debug")
+          ]
+      };
+    await sbSendDebug.sendMessages(<ServiceBusMessage> { body: event })
   })
 
   await webhooks.verifyAndReceive({
@@ -297,8 +293,6 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
     context.res = { status: 417, body: "Thrown error: " + err };
   });
 
-  await sbSendDebug.close();
-  await sbClient.close();
   context.done();
 };
 
