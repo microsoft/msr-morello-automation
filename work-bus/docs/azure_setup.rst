@@ -82,7 +82,7 @@ need to call constructors and occasionally post-factually update objects.
 
     $resgrp = New-AzResourceGroup -Name morello-github -Location "UK South"
 
-* Create a storage account and the Function App with managed identity for the
+* Create a storage account and a Function App with managed identity for the
   :doc:`github-reflector`.::
 
     $stacc = New-AzStorageAccount -ResourceGroupName $resgrp.ResourceGroupName `
@@ -210,6 +210,27 @@ need to call constructors and occasionally post-factually update objects.
         @{ "GITHUB_HMAC_KEY" = $github_hmac_key `
          }
 
+Reflector App Service Plan
+==========================
+
+By default, ``New-AzFunctionApp`` associates its constructed app with a fully
+dynamic App Service Plan (ASP).  While these are inexpensive, they permit the
+application to scale down to zero instances live, and functions can take long
+enough to start up that GitHub's WebHook machinery complains of timeouts.
+Therefore, one might want to change the ASP associated with the Function App.
+Assuming you have an ASP already, run ::
+
+  Update-AzFunctionApp -ResourceGroupName $resgrp.ResourceGroupName `
+    -Name $ghfn.Name -PlanName $asp.Name
+
+You probably want to set the Function App to be "Always On", too, in its
+Configuration's General Settings in the Portal, or with the somewhat clumsily
+generic ::
+
+  Get-AzResource -ResourceType $ghfn.Type `
+    -ResourceGroupName $ghfn.ResourceGroupName -Name $ghfn.Name | `
+  Set-AzResource -PropertyObject @{"siteConfig" = @{"AlwaysOn" = $true}}
+
 Connection Strings
 ##################
 
@@ -270,6 +291,8 @@ Identity from above.
    against key exfiltration (restricted file ownership and permissions, limited
    access to the machine bearing keys, &c).
 
+   See https://github.com/Azure/azure-sdk-for-js/issues/22011
+
 .. _work-bus/docs/azure_setup/service_princ_mk:
 
 Creating a Service Principal
@@ -282,7 +305,16 @@ resource group. ::
    New-AzADServicePrincipal -Scope $resgrp.ResourceId -Role Reader `
      -DisplayName ...
 
-A service principal can be looked up by display name::
+While most of our deployment runs within a single Azure tenant, we have set up
+a stanging version in a second tenant.  Occasionally, it is useful to allow the
+management node's *production* service principal to access *testing* resources;
+as such, we have set our service principal's ``SignInAudience`` value to
+``AzureADMultipleOrgs`` rather than the default of ``AzureADMyOrg``.  This can
+be done by updating the "application" associated with the service principal::
+
+    Update-AzADApplication -SignInAudience AzureADMultipleOrgs -DisplayName ...
+
+Once created, a service principal can be looked up by display name::
 
    $sp = Get-AzADServicePrincipal -Displayname ...
 
@@ -293,6 +325,28 @@ is what most other things will require.
 
    Service principals are global to a tennant's entire AD, rather than scoped
    to any associated Subscription or Resource Group.
+
+.. note::
+
+   The Azure Portal does not make it easy to see what permissions have been
+   granted to a service principal.  Having looked one up as above, to see
+   its associated role assignments, run::
+
+       Get-AzRoleAssignment -ObjectId $sp.Id
+
+   You can restrict the scope searched with the ``-Scope`` or
+   ``-ResourceGroup`` switches.  It may be convenient to send the result
+   through ``Format-Table -Wrap RoleDefinitionName,Scope``.
+
+   This seems to neglect things that might be called "resource-specific roles",
+   which include Azure CosmosDB SQL Role assignments.  For those, you will need
+   to use ``Get-AzCosmosDBSqlRoleAssignment`` to interrogate *per database* and
+   then *filter* on the result::
+
+     Get-AzCosmosDBSqlRoleAssignment `
+       -ResourceGroupName $resgrp.ResourceGroupName `
+       -AccountName $cdbacc.name `
+     | Where-Object {$_.Principalid -eq $exsp.Id }
 
 .. _work-bus/docs/azure_setup/service_princ_sec:
 
@@ -371,7 +425,8 @@ Optionally, we may grant this service principal
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Receiver" `
      -Scope $wqghd.Id -ObjectId $exsp.Id
 
-* read access cosmos database tables::
+* read access cosmos database tables (chiefly so that we can use the
+  ``list-github-webhook-acl`` command with this principal's identity)::
 
     New-AzCosmosDBSqlRoleAssignment -ResourceGroupName $resgrp.ResourceGroupName `
       -AccountName $cdbacc.Name -PrincipalId $exsp.Id `
@@ -388,3 +443,27 @@ Optionally, we may grant this service principal
 
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Sender" `
      -Scope $wqq.Id -ObjectId $exsp.Id
+
+.. _work-bus/docs/azure_setup/service_princ_cross:
+
+Cross-Tenant Authentication
+===========================
+
+We will refer to the "origin" tenant where the service principal was created and
+the "remote" tenant(s) to which it also wishes to authenticate.
+
+1. The remote tenant must create a service principal with the same "app id"::
+
+     New-AzADServicePrincipal -AppId ...
+
+2. The remote tenant must assign RBAC rules for this new service principal.
+
+3. When authenticating, the service must now indicate that the tenant it
+   wants to access is the remote.  For ``EnvironmentCredential`` authentication
+   in particular, that means changing the ``AZURE_TENANT_ID`` value (while
+   retaining ``AZURE_CLIENT_ID`` and, if in use, ``AZURE_CLIENT_SECRET``).
+
+The last step is the most confusing; authenticating to the origin tenant will
+*succeed* but will not grant access to resources in the remote tenant.
+Accessing resources in both concurrently is, therefore, a bit of a challenge
+(but, presumably, doable with enough engineering effort).
