@@ -91,10 +91,12 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
   // What we're actually here for
   webhooks.on("workflow_job", async function ({id, name, payload})
   {
-    const labels = payload.workflow_job.labels
+    const labels = payload.workflow_job.labels;
+    const repo = payload.repository;
+
     context.log(
       "Got workflow_job event action=%s on repository=%s (org=%s) from=%s; runs-on=%s",
-      payload.action, payload.repository.full_name,
+      payload.action, repo.full_name,
       payload.organization && payload.organization.login,
       payload.sender.login, labels);
 
@@ -129,9 +131,7 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
 
       // Require that the source be in the ACL
       if (!await aclCheck(db,
-                          payload.repository.owner.login,
-                          payload.repository.name,
-                          labels[1])) {
+                          repo.owner.login, repo.name, labels[1])) {
         context.log("Unauthorized; done")
         context.res = { status: 200, body: "Unauthorized; done" };
         return;
@@ -160,14 +160,14 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
         installation: payload.installation.id
 
       , // Identify the repository to which the runner should bind...
-        owner: payload.repository.owner.login
-      , repo: payload.repository.name
+        owner: repo.owner.login
+      , repo: repo.name
 
       , /*
          * You'd imagine this would be the .url field, but no, the runner
          * config.sh wants the HTML URL, so, here 'tis!
          */
-        repo_html_url: payload.repository.html_url
+        repo_html_url: repo.html_url
 
       , /*
          * Pass through the entire set of labels.  The first *must* be
@@ -262,6 +262,7 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
       { aadCredentials: selfcred
       , endpoint: process.env["ACL_COSMOS"] });
 
+    const repo = payload.repository;
     try {
       const db = cosmos.database("GitHubWebHookDB");
       const event : lqty.GitHubStarEvent =
@@ -269,18 +270,14 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
         , action: payload.action
         , starred_at: payload.starred_at
         , installation: payload.installation.id
-        , owner: payload.repository.owner.login
-        , repo: payload.repository.name
-        , repo_html_url: payload.repository.html_url
+        , owner: repo.owner.login
+        , repo: repo.name
+        , repo_html_url: repo.html_url
         , debug:
             [ await aclCheck(db,
-                payload.repository.owner.login,
-                payload.repository.name,
-                "msr-morello")
+                repo.owner.login, repo.name, "msr-morello")
             , await aclCheck(db,
-                payload.repository.owner.login,
-                payload.repository.name,
-                "reflector-debug")
+                repo.owner.login, repo.name, "reflector-debug")
             ]
         };
       await sbSendDebug.sendMessages(<ServiceBusMessage> { body: event })
