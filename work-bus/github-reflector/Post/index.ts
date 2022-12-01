@@ -1,5 +1,5 @@
 import { CosmosClient, Database as CosmosDB } from "@azure/cosmos"
-import { AzureFunction, Context, HttpRequest } from "@azure/functions"
+import { AzureFunction, Context, HttpRequest, Logger } from "@azure/functions"
 import { DefaultAzureCredential } from "@azure/identity"
 import { ServiceBusClient, ServiceBusMessage } from "@azure/service-bus"
 
@@ -28,7 +28,8 @@ declare global {
  * handle to a database, but, rather, really wants to run queries for us), and,
  * so, here we are.
  */
-async function aclCheck(db: CosmosDB, owner: string, repo: string, label: string) {
+async function aclCheck(db: CosmosDB, log: Logger,
+			owner: string, repo: string, label: string) {
   // Is the owner * label tuple authorized?
   try {
     const {resources: ownerOK} = await db.container("AllowOwner").items.query(
@@ -42,6 +43,7 @@ async function aclCheck(db: CosmosDB, owner: string, repo: string, label: string
     }
   } catch (err) {
     // CosmosDB throws if the container isn't present
+    log(err)
   }
 
   // What about the owner * repo * label tuple?
@@ -59,6 +61,7 @@ async function aclCheck(db: CosmosDB, owner: string, repo: string, label: string
     }
   } catch (err) {
     // Again, just take that to mean "no"
+    log(err)
   }
 
   return false;
@@ -140,7 +143,7 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
 
 
     // Require that the source be in the ACL
-    if (!await aclCheck(cosmosGHWHDB,
+    if (!await aclCheck(cosmosGHWHDB, context.log,
                         repo.owner.login, repo.name, labels[1])) {
       const msg = `${repo.owner.login} ${repo.name} unauth for ${labels[1]}`;
 
@@ -273,9 +276,9 @@ const httpTrigger: AzureFunction = async function (context: Context, req: HttpRe
       , repo: repo.name
       , repo_html_url: repo.html_url
       , debug:
-          [ await aclCheck(cosmosGHWHDB,
+          [ await aclCheck(cosmosGHWHDB, context.log,
               repo.owner.login, repo.name, "msr-morello")
-          , await aclCheck(cosmosGHWHDB,
+          , await aclCheck(cosmosGHWHDB, context.log,
               repo.owner.login, repo.name, "reflector-debug")
           ]
       };
