@@ -1,6 +1,8 @@
 import type { Octokit } from "octokit"
-import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods"
+import type { ServiceBusClient } from "@azure/service-bus"
 import type { Arguments, Argv } from "yargs"
+
+import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods"
 import { spawn } from "child_process"
 import * as fs from "fs"
 
@@ -46,27 +48,47 @@ async function makeSettings(
   return await new Promise( (resolve) => runprep.on("exit", resolve) )
 }
 
-async function prepareBoard(script : string, label2: string): Promise<number> {
-  console.error("work-bus executor github: preparing board")
+function prepareBoard(script : string, label2: string) {
+  console.error("work-bus executor github: preparing board");
 
   const runprep = spawn(script, [label2],
     { shell: false
     , timeout: 600000 // 10 minutes; script also has its own set of timeouts
     , stdio: ["ignore", "inherit", "inherit"]
+    , detached: true // Spawned task is the head of a new process group
     });
-  return await new Promise( (resolve) => runprep.on("exit", resolve) )
+
+  async function cleanup(): Promise<void> {
+    /*
+     * Because we spawned the worker as detached, it is the leader of its own
+     * process group.  Therefore, killing its negated PID will kill everything
+     * in the group and nothing more.  We're relying on the worker being fairly
+     * well-behaved here: it absolutely could evade this mechanism and there's
+     * not a lot we could do about it.  Bah.
+     */
+    const pid = runprep.pid;
+    if (pid !== undefined) {
+      process.kill(-pid);
+    }
+  }
+
+  return { cleanup: cleanup
+         , promise: new Promise( (resolve) => runprep.on("exit", resolve) )
+         };
 }
 
 export async function prepare(
  argv : Arguments,
- _: any /* ServiceBusClient */,
+ _: ServiceBusClient,
  msg : lib.QueueDataTypes.GitHubWorkflowJobQueuedEvent)
  : Promise<DispatchResult> {
 
   console.error("work-bus executor github: event for", msg.owner, msg.repo)
 
   // Boot the board
-  const prepareBoardP = prepareBoard(
+  const { cleanup: prepareBoardCleanup
+        , promise: prepareBoardP
+        } = prepareBoard(
     argv.board_prepare as string,
     msg.labels[2])
 
@@ -146,6 +168,11 @@ export async function prepare(
   });
 
   async function cleanup(): Promise<void> {
+    /*
+     * Tear down the board preparation process group.
+     */
+    await prepareBoardCleanup();
+
     /*
      * Ask the action runner to remove itself.  This may fail if the runner
      * on the board has already completed its job, but it shouldn't hurt to
