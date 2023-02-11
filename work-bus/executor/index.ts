@@ -3,7 +3,7 @@
 import { spawn } from "child_process"
 import * as fs from 'fs'
 
-import { ServiceBusClient } from "@azure/service-bus"
+import { ServiceBusClient, ServiceBusReceiver } from "@azure/service-bus"
 import * as yargs from "yargs"
 
 import * as lib from "@msr-morello-work-bus/lib"
@@ -59,13 +59,7 @@ function withShutdown<T>(act: Promise<T>,
   });
 }
 
-async function waitForWork(sb: ServiceBusClient, argv: yargs.Arguments) {
-  /* Subscribe to a queue or a topic subscription, as directed */
-  const sbQN = argv.busqueue as string;
-  const sbQ = argv.busqueuesub != undefined
-    ? sb.createReceiver(sbQN, argv.busqueuesub as string)
-    : sb.createReceiver(sbQN)
-
+async function waitForWork(sbQ: ServiceBusReceiver, argv: yargs.Arguments) {
   console.error("work-bus executor: waiting for job to become available...");
 
   const qmsg = await withShutdown(
@@ -73,11 +67,13 @@ async function waitForWork(sb: ServiceBusClient, argv: yargs.Arguments) {
     360000 /* in six mintues, if we haven't gotten a job... */,
     argv.board_shutdown as string | undefined /* ... shut down the board */);
 
-  return { sbQ, qmsg };
+  return qmsg;
 }
 
-async function waitAndPrepare(sb: ServiceBusClient, argv: yargs.Arguments) {
-  const { sbQ, qmsg } = await waitForWork(sb, argv);
+async function waitAndPrepare(sb: ServiceBusClient,
+			      sbQ: ServiceBusReceiver,
+			      argv: yargs.Arguments) {
+  const qmsg = await waitForWork(sbQ, argv);
   const mbody = <lib.QueueDataTypes.EnqueuedJobEvent> qmsg.body;
 
   console.error("work-bus executor: dispatching prepare...", mbody);
@@ -163,8 +159,14 @@ function jobResultToExitCode(r: t.DispatchJobResult) {
   const argv = await yargparse.parseAsync(process.argv.slice(2))
   const sbClient = lib.AzureServiceBusUtils.clientFromYargs(argv);
 
+  /* Subscribe to a queue or a topic subscription, as directed */
+  const sbQN = argv.busqueue as string;
+  const sbQ = argv.busqueuesub != undefined
+    ? sbClient.createReceiver(sbQN, argv.busqueuesub as string)
+    : sbClient.createReceiver(sbQN)
+
   const { dispRes, onComplete: dispComplete, onAbandon: dispAbandon } =
-    await waitAndPrepare(sbClient, argv);
+    await waitAndPrepare(sbClient, sbQ, argv);
 
   try {
     const pCompMsg = makeCompletionPromise(
