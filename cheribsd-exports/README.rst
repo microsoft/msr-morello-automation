@@ -79,6 +79,35 @@ You will want to copy the following ``output/`` products to the cluster host mac
     cheribsd-morello-purecap.tar.xz
     cheribsd-mfs-root-morello-purecap.img
 
+.. _cheribsd-exports/README/images/miniboot:
+
+Minimal CheriBSD Boot Environments
+==================================
+
+The cluster scripts herein require a minimum set of functionality from the
+CheriBSD kernel they boot.  In particular, we expect them to have...
+
+- The ``kernel`` to have SATA and networking functionality built in (not as a
+  module)
+
+- ``geom_part_gpt.ko`` and ``geom_eli.ko`` for setting up the attached scratch
+  storage
+
+- ``nullfs.ko`` is used to bind over ``/usr/local`` and friends
+
+- ``mac_ntpd.ko`` is loaded by the NTP machinery
+
+Additionally, several workloads run on our cluster, beyond the basic booting
+captured herein, use
+
+- ``fusefs.ko`` for rendering exotic things as file trees
+
+- ``hwpmc.ko`` for performance introspection
+
+When setting up a minimal boot environment, you will almost surely want to
+ensure that at least all of the above exist in addition to other
+special-purpose modules required by your workload(s).
+
 Setting Up the Network Shares
 #############################
 
