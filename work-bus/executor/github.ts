@@ -1,5 +1,4 @@
 import type { Octokit } from "octokit"
-import type { ServiceBusClient } from "@azure/service-bus"
 import type { Arguments, Argv } from "yargs"
 
 import { restEndpointMethods } from "@octokit/plugin-rest-endpoint-methods"
@@ -79,7 +78,7 @@ function prepareBoard(script : string, label2: string) {
 
 export async function prepare(
  argv : Arguments,
- _: ServiceBusClient,
+ _: lib.AzureServiceBusUtils.ServiceBusClient,
  msg : lib.QueueDataTypes.GitHubWorkflowJobQueuedEvent)
  : Promise<DispatchResult> {
 

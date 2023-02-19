@@ -1,4 +1,3 @@
-import { ServiceBusClient, ServiceBusMessage } from "@azure/service-bus"
 import type { Arguments, Argv } from "yargs"
 
 import * as lib from "@msr-morello-work-bus/lib"
@@ -7,12 +6,12 @@ import { DispatchResult, DispatchJobResultShutdown } from "./types"
 
 async function act(
  argv : Arguments,
- sbClient: ServiceBusClient,
+ sbClient: lib.AzureServiceBusUtils.ServiceBusClient,
  msg : lib.QueueDataTypes.ShutdownQueuedEvent)
 {
   const sbSendQ = sbClient.createSender(argv.buscomplete as string);
 
-  await sbSendQ.sendMessages(<ServiceBusMessage>
+  await sbSendQ.sendMessages(<lib.AzureServiceBusUtils.ServiceBusMessage>
     { sessionId: `shutdown-${msg.id}`
     , messageId: `shutdown-${msg.id}`
     , body: { type: "shutdown-reply"
@@ -26,7 +25,7 @@ async function act(
 
 export async function prepare(
  argv : Arguments,
- sbClient: ServiceBusClient,
+ sbClient: lib.AzureServiceBusUtils.ServiceBusClient,
  msg : lib.QueueDataTypes.ShutdownQueuedEvent)
  : Promise<DispatchResult> {
 

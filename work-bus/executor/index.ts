@@ -3,7 +3,6 @@
 import { spawn } from "child_process"
 import * as fs from 'fs'
 
-import { ServiceBusClient, ServiceBusReceiver } from "@azure/service-bus"
 import * as yargs from "yargs"
 
 import * as lib from "@msr-morello-work-bus/lib"
@@ -59,7 +58,7 @@ function withShutdown<T>(act: Promise<T>,
   });
 }
 
-async function waitForWork(sbQ: ServiceBusReceiver, argv: yargs.Arguments) {
+async function waitForWork(sbQ: lib.AzureServiceBusUtils.ServiceBusReceiver, argv: yargs.Arguments) {
   console.error("work-bus executor: waiting for job to become available...");
 
   const qmsg = await withShutdown(
@@ -70,8 +69,8 @@ async function waitForWork(sbQ: ServiceBusReceiver, argv: yargs.Arguments) {
   return qmsg;
 }
 
-async function waitAndPrepare(sb: ServiceBusClient,
-			      sbQ: ServiceBusReceiver,
+async function waitAndPrepare(sb: lib.AzureServiceBusUtils.ServiceBusClient,
+			      sbQ: lib.AzureServiceBusUtils.ServiceBusReceiver,
 			      argv: yargs.Arguments) {
   const qmsg = await waitForWork(sbQ, argv);
   const mbody = <lib.QueueDataTypes.EnqueuedJobEvent> qmsg.body;
@@ -116,7 +115,7 @@ async function waitAndPrepare(sb: ServiceBusClient,
 }
 
 function makeCompletionPromise(
- sbClient: ServiceBusClient,
+ sbClient: lib.AzureServiceBusUtils.ServiceBusClient,
  argv: yargs.Arguments,
  completionFrom: string | undefined) {
 

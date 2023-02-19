@@ -1,8 +1,11 @@
 import type { Argv, Arguments } from "yargs"
-import type { ServiceBusReceiver
+import type { ServiceBusMessage
+	    , ServiceBusReceiver
             , ServiceBusReceivedMessage } from "@azure/service-bus"
 import { EnvironmentCredential } from "@azure/identity"
-import { ServiceBusClient } from "@azure/service-bus"
+import { ServiceBusClient, ServiceBusClientOptions } from "@azure/service-bus"
+
+export type { ServiceBusClient, ServiceBusMessage, ServiceBusReceiver }
 
 export function busYargs(yargs: Argv) {
   return yargs

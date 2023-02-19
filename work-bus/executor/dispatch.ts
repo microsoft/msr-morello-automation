@@ -1,6 +1,5 @@
 import * as yargs from "yargs"
 import * as lib from "@msr-morello-work-bus/lib"
-import { ServiceBusClient } from "@azure/service-bus"
 
 import { DispatchResult } from "./types"
 import * as egh from "./github"
@@ -21,7 +20,7 @@ export function dispatchYargs(yargs: yargs.Argv) {
 }
 
 export function dispatchPrepare(argv: yargs.Arguments,
- sb: ServiceBusClient,
+ sb: lib.AzureServiceBusUtils.ServiceBusClient,
  event: lib.QueueDataTypes.EnqueuedJobEvent)
  : Promise<DispatchResult> {
 
