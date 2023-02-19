@@ -25,3 +25,4 @@ opt uid=0 gid=0 mode=755 type=dir
 opt/bin uid=0 gid=0 mode=755 type=dir
 opt/bin/msr-morello-init contents=opt/bin/msr-morello-init uid=0 gid=0 mode=755 type=file
 opt/bin/msr-github-act-runner.sh contents=opt/bin/msr-github-act-runner.sh uid=0 gid=0 mode=755 type=file
+opt/bin/msr-github-act-runner-inner.sh contents=opt/bin/msr-github-act-runner-inner.sh uid=0 gid=0 mode=755 type=file

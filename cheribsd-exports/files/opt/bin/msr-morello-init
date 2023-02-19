@@ -5,3 +5,9 @@ set -e -u
 # Go ahead and bootstrap both package systems
 pkg64 bootstrap -y
 pkg64c bootstrap -y
+
+# Create a non-root user in group wheel (we do this here because our
+# host system isn't, itself, FreeBSD).
+pw useradd -n worker -G wheel -w no -d /mnt/worker -m -s /bin/sh
+cp -a /root/.ssh /mnt/worker/
+chown -R worker /mnt/worker/.ssh
