@@ -1,0 +1,15 @@
+{
+  "remotecmd": "/tank/morello/scripts.test/local/bin/stub-run-ssh.sh",
+  "board_shutdown": "/tank/morello/scripts.test/local/bin/stub-shutdown.sh",
+  "board_prepare": "/tank/morello/scripts.test/local/bin/stub-board-prepare.sh",
+  "github_prepare": "/tank/morello/scripts.test/local/bin/stub-github-prepare.sh",
+  "github_run": "/opt/bin/msr-github-act-runner.sh",
+
+  "busname": "example.servicebus.windows.net",
+  "busqueue": "work-queue",
+  "busqueuesub": "msr-morello",
+  "buscomplete": "work-complete",
+
+  "github_appid": 123456,
+  "github_key": "[redacted]"
+}

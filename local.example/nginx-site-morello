@@ -1,0 +1,42 @@
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+	server_name _;
+
+	location /nfs/ {
+		alias /tank/morello/export/;
+		try_files $uri $uri/ =404;
+	}
+
+	location /docs/ {
+		alias /tank/morello/scripts/_sphinx/build/html/;
+		index index.html;
+		try_files $uri $uri/ =404;
+	}
+}
+
+server {
+	listen 443 ssl default_server;
+	listen [::]:443 ssl default_server;
+	server_name _;
+
+	ssl_certificate "/etc/nginx/tpm-http.crt";
+	ssl_certificate_key "engine:pkcs11:pkcs11:token=http;object=httpkey";
+
+	location /nfs/ {
+		alias /tank/morello/export/;
+		try_files $uri $uri/ =404;
+	}
+
+	location /docs/ {
+		alias /tank/morello/scripts/_sphinx/build/html/;
+		index index.html;
+		try_files $uri $uri/ =404;
+	}
+
+	location /secure/ {
+		alias /tank/morello/export-secure/;
+		try_files $uri $uri/ =404;
+	}
+
+}

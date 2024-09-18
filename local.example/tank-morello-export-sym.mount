@@ -1,0 +1,18 @@
+# Construct a tmpfs mountpoint, for use by board_prepare.sh, inside nginx's
+# /nfs location.  This lets board_prepare.sh create per-board symlinks so that
+# we can leave the boot URLs on the machines constant over time.
+
+[Unit]
+Description=tmpfs on /tank/morello/export/sym
+Requires=zfs-mount.service
+After=zfs-mount.service
+Requires=tank-morello-export.mount
+After=tank-morello-export.mount
+
+[Mount]
+What=tmpfs
+Where=/tank/morello/export/sym
+Type=tmpfs
+
+# morello-auto's UID and GID
+Options=uid=1002,gid=1003,mode=775,rw,nosuid,nodev,size=1M

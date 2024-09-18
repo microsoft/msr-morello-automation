@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# BEFORE: FILESYSTEMS
+# REQUIRE:
+# PROVIDE: msr-morello-opt-xtra
+
+# This is horrifying.  See "Additional NFS  in the documentation.
+# If you're here, I'm so sorry.
+
+NFSROOT="$(mount -p | awk '$2 == "/"{ print $1 }')"
+NFSHOST="${NFSROOT%:*}"
+
+OPTGREF="${NFSHOST}:/tank/morello/export/__git_reference"
+echo "msr-morello: mount /opt/msr-gitref from ${OPTGREF}"
+mount -r "${OPTGREF}" /opt/msr-gitref
+
+OPTXTRA="${NFSHOST}:/tank/morello/export/scratch/$(hostname -s)/opt/msr-xtra"
+echo "msr-morello: mount /opt/msr-xtra if offered at ${OPTXTRA}..."
+mount -r -o retrycnt=1 "${OPTXTRA}" /opt/msr-xtra

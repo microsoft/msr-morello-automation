@@ -1,0 +1,20 @@
+#mtree
+# /etc already exists
+etc/rc.conf.d uid=0 gid=0 mode=755 type=dir
+etc/rc.conf.d/ntpdate contents=etc/rc.conf.d/ntpdate uid=0 gid=0 mode=644 type=file
+# /etc/rc.d already exists
+etc/rc.d/msr-morello-opt-xtra contents=etc/rc.d/msr-morello-opt-xtra uid=0 gid=0 mode=755 type=file
+etc/rc.d/msr-morello-pkg contents=etc/rc.d/msr-morello-pkg uid=0 gid=0 mode=755 type=file
+# /etc/ssl already exists
+# /etc/ssl/certs already exists
+#   This is /etc/nginx/tpm-http.crt under the openssl -hash name:
+etc/ssl/certs/morello-mgmt-http.crt contents=etc/ssl/certs/morello-mgmt-http.crt uid=0 gid=0 mode=644 type=file
+etc/ssl/certs/7182169b.0 contents=etc/ssl/certs/morello-mgmt-http.crt uid=0 gid=0 mode=644 type=file
+# /root already exists
+root/.ssh uid=0 gid=0 mode=700 type=dir
+root/.ssh/authorized_keys contents=root/.ssh/authorized_keys uid=0 gid=0 mode=400 type=file
+# /opt/bin already exists
+opt/bin/github-act-runner contents=opt/bin/github-act-runner uid=0 gid=0 mode=755 type=file
+opt/msr-gitref uid=0 gid=0 mode=755 type=dir
+# Create mountpoint for "extra" files; see "The Mysterious /opt/msr-xtra"
+opt/msr-xtra uid=0 gid=0 mode=755 type=dir

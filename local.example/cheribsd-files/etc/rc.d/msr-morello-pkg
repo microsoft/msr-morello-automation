@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# REQUIRE: msr-morello-pre-net
+# BEFORE: NETWORKING
+
+echo "msr-morello: pkg.conf"
+
+mkdir /usr/local/etc
+cat >>/usr/local/etc/pkg.conf <<HERE
+pkg_env : {
+  http_proxy: "http://10.0.0.1:3128/"
+}
+HERE
+mkdir /usr/local64/etc
+cat >>/usr/local64/etc/pkg.conf <<HERE
+pkg_env : {
+  http_proxy: "http://10.0.0.1:3128/"
+}
+HERE
+
