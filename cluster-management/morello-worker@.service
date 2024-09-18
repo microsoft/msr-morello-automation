@@ -1,5 +1,6 @@
 [Unit]
 Description=Morello work-queue and board-runner
+After=network.target
 After=dev-morello-%i-tty\x2dmcc.device
 After=dev-morello-%i-tty\x2dap0.device
 BindsTo=dev-morello-%i-tty\x2dmcc.device
