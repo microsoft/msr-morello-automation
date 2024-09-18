@@ -4,10 +4,12 @@ import * as fs from 'fs'
 import yargs from "yargs"
 import { Octokit, App } from "octokit"
 
+import * as lib from "@msr-morello-work-bus/lib"
+
 (async () => {
-  const vp = yargs
+  const vp = lib.YargsUtils.multiconfig(yargs)
     .scriptName("msr-morello-wbclient")
-    .config("config", "JSON configuration file")
+    // .config("config", "JSON configuration file")
     .commandDir("cmds")
     .demandCommand(1)
     .help()
