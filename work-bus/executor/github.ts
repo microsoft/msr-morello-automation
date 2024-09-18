@@ -116,6 +116,7 @@ export async function prepare(
       msg.id.toString());
 
   // Spawn the local runner to register with github
+  console.error("work-bus executor github: contacting mothership for settings")
   const registerRunnerP = makeSettings(
     argv.github_prepare as string,
     runnerName, msg.labels, msg.repo_html_url, tresp.data.token)
