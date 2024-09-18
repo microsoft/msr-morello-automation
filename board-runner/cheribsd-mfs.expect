@@ -188,6 +188,10 @@ if { 1 } {
 
 # Bring up the local storage
 mfs_run ${sap} "gpart destroy ada0 2>/dev/null || true"
+
+# Tell our attached storage to forget everything it knows.
+mfs_run ${sap} "trim -f -v /dev/ada0"
+
 mfs_run ${sap} "geli onetime ada0"
 mfs_run ${sap} "gpart create -s gpt ada0.eli"
 mfs_run ${sap} "gpart add -i 1 -s 61G -t freebsd-swap -l eliswap ada0.eli"
