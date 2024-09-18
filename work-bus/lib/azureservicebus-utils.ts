@@ -22,15 +22,26 @@ export function busYargs(yargs: Argv) {
     demandOption: true,
     describe: "Azure Service Bus queue name",
   })
+  .option("busendpoint", {
+    type: "string",
+    describe: "Azure Service Bus custom endpoint",
+  })
 }
 
 export function clientFromYargs(argv: Arguments) {
+  let connopts : ServiceBusClientOptions = { }
+
+  if ("busendpoint" in argv) {
+    connopts.customEndpointAddress = argv.busendpoint as string;
+  }
+
   if ("busconn" in argv) {
-    return new ServiceBusClient(argv.busconn as string);
+    return new ServiceBusClient(argv.busconn as string, connopts);
   } else if ("busname" in argv) {
     return new ServiceBusClient(
       argv.busname as string,
-      new EnvironmentCredential());
+      new EnvironmentCredential(),
+      connopts);
   } else {
     throw new Error("Can't construct bus client; need conn str or bus name");
   }
