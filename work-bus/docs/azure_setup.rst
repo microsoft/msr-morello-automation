@@ -16,7 +16,8 @@ resources by name.  The Resource Group is required by just about everything::
 The "high-level" resources::
 
     $cdbacc = Get-AzCosmosDBAccount `
-      -ResourceGroupName $resgrp.ResourceGroupName -Name morello-github-cosmos
+      -ResourceGroupName $resgrp.ResourceGroupName `
+      -Name portmeirion-msrcam-morello-cosmos
 
     $ghacldb= Get-AzCosmosDBSqlDatabase `
       -ResourceGroupName $resgrp.ResourceGroupName -AccountName $cdbacc.Name `
@@ -26,12 +27,13 @@ The "high-level" resources::
       -Name morello-github-entryfn
 
     $bus    = Get-AzServiceBusNamespace `
-      -ResourceGroupName $resgrp.ResourceGroupName -Name morello-github-bus
+      -ResourceGroupName $resgrp.ResourceGroupName `
+      -Name portmeirion-msrcam-morello-bus
 
 And then lower-level entities that you're less likely to need::
 
     $stacc  = Get-AzStorageAccount `
-      -ResourceGroupName $resgrp.ResourceGroupName -Name morellogithubstorage
+      -ResourceGroupName $resgrp.ResourceGroupName -Name msrcammorellocluster
 
     $ghaclown = Get-AzCosmosDBSqlContainer `
       -ResourceGroupName $resgrp.ResourceGroupName -AccountName $cdbacc.Name `
@@ -181,6 +183,8 @@ need to call constructors and occasionally post-factually update objects.
       -AccountName $cdbacc.Name -DatabaseName $ghacldb.Name `
       -Name AllowRepository -PartitionKeyKind Hash -PartitionKeyPath "/id"
 
+* Grant the reflector access to the database::
+
     New-AzCosmosDBSqlRoleAssignment -ResourceGroupName $resgrp.ResourceGroupName `
       -AccountName $cdbacc.Name -PrincipalId $ghfn.IdentityPrincipalId `
       -RoleDefinitionName "Cosmos DB Built-in Data Reader" `
@@ -303,7 +307,15 @@ Scope and Role are not, strictly, required, it is polite to set them to our
 resource group. ::
 
    New-AzADServicePrincipal -Scope $resgrp.ResourceId -Role Reader `
-     -DisplayName ...
+     -DisplayName portmeirion-msrcam-morello-cluster
+
+Once created, a service principal can be looked up by display name::
+
+   $exsp = Get-AzADServicePrincipal `
+     -Displayname portmeirion-msrcam-morello-cluster
+
+The ``Id`` field on a service principal object, rather than its display name,
+is what most other things will require.
 
 While most of our deployment runs within a single Azure tenant, we have set up
 a stanging version in a second tenant.  Occasionally, it is useful to allow the
@@ -312,14 +324,7 @@ as such, we have set our service principal's ``SignInAudience`` value to
 ``AzureADMultipleOrgs`` rather than the default of ``AzureADMyOrg``.  This can
 be done by updating the "application" associated with the service principal::
 
-    Update-AzADApplication -SignInAudience AzureADMultipleOrgs -DisplayName ...
-
-Once created, a service principal can be looked up by display name::
-
-   $sp = Get-AzADServicePrincipal -Displayname ...
-
-The ``Id`` field on a service principal object, rather than its display name,
-is what most other things will require.
+    Update-AzADApplication -SignInAudience AzureADMultipleOrgs -ObjectId $exsp.Id
 
 .. note::
 
@@ -332,7 +337,7 @@ is what most other things will require.
    granted to a service principal.  Having looked one up as above, to see
    its associated role assignments, run::
 
-       Get-AzRoleAssignment -ObjectId $sp.Id
+       Get-AzRoleAssignment -ObjectId $exsp.Id
 
    You can restrict the scope searched with the ``-Scope`` or
    ``-ResourceGroup`` switches.  It may be convenient to send the result
@@ -353,7 +358,11 @@ is what most other things will require.
 Service Principal Client Secrets
 ================================
 
-If ``$sp`` holds the service principal object, then it should suffice to run
+.. warning::
+
+   Internal policy now forbids the use of client secrets.
+
+If ``$exsp`` holds the service principal object, then it should suffice to run
 something like this to create a credential with a particular lifetime::
 
    $sppw = New-AzADSpCredential -ObjectId $sp.Id `
@@ -443,6 +452,11 @@ Optionally, we may grant this service principal
 
    New-AzRoleAssignment -RoleDefinitionName "Azure Service Bus Data Sender" `
      -Scope $wqq.Id -ObjectId $exsp.Id
+
+* read access to the "morello cluster xtra" storage account blobs::
+
+   New-AzRoleAssignment -RoleDefinitionName "Storage Blob Data Reader" `
+     -Scope $stacc.Id -ObjectId $exsp.Id
 
 .. _work-bus/docs/azure_setup/service_princ_cross:
 
