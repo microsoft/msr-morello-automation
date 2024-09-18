@@ -106,7 +106,9 @@ captured herein, use
 
 When setting up a minimal boot environment, you will almost surely want to
 ensure that at least all of the above exist in addition to other
-special-purpose modules required by your workload(s).
+special-purpose modules required by your workload(s).  See
+:download:`create-xtra-boot.sh`.  The constructed directory tree should be
+pushed somewhere the cluster boot scripts know to retrieve.
 
 Setting Up the Network Shares
 #############################

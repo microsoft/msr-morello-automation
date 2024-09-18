@@ -5,7 +5,8 @@
 # PROVIDE: msr-morello-pre-net
 
 # At this point, after FILESYSTEMS, diskless(8) will have brought up enough of
-# the world that we should have real storage mounted on /mnt
+# the world that we should have real storage mounted on /mnt .  See
+# /conf/default/etc/fstab .
 
 # If provided by our boot scripts, install the ssh key
 SSH_KEY=ssh_host_ecdsa_key
