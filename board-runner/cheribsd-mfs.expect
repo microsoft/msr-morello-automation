@@ -226,10 +226,9 @@ mfs_run ${sap} "hostname ${cmdopts(board)}"
 mfs_run ${sap} "sysctl kern.hostuuid=\$(uuidgen)"
 mfs_run ${sap} "kenv smbios.system.uuid=\$(sysctl -n kern.hostuuid)"
 
-## TODO: Desirable, but /etc/rc.d/netwait is not yet in MFS roots.
-## Wait for the network so we don't hit retransmission timeouts in mounting NFS
-#mfs_run ${sap} "echo 'netwait_if=\"re0\"' >> /etc/rc.conf"
-#mfs_run ${sap} "/etc/rc.d/netwait onestart"
+# Wait for the network so we don't hit retransmission timeouts in mounting NFS
+mfs_run ${sap} "echo 'netwait_if=\"re0\"' >> /etc/rc.conf"
+mfs_run ${sap} "/etc/rc.d/netwait onestart"
 
 # Pivot to NFS root
 mfs_run ${sap} "kenv vfs.root.mountfrom=nfs:${cmdopts(nfs-root)}"
